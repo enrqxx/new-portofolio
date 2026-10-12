@@ -17,7 +17,13 @@ export type SoundName =
   | "save" // SAVE screen confirm
   | "encounter" // enemy encounter sting
   | "mercy" // spare sting
-  | "turn"; // end of turn / transition
+  | "turn" // end of turn / transition
+  | "break" // soul shatter (game over)
+  | "alert" // "!" muncul saat encounter
+  | "fall" // soul meluncur ke bawah saat encounter
+  | "crack" // soul cracks in half (game over, step 2)
+  | "shatter" // soul shards scatter (game over, step 3)
+  | "gameover"; // game over jingle
 
 let ctx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
@@ -94,8 +100,52 @@ function tone({
   osc.stop(start + duration + 0.02);
 }
 
+type NoiseOptions = {
+  duration?: number;
+  volume?: number;
+  delay?: number;
+  /** Highpass cutoff (Hz) — makin tinggi makin "kaca". */
+  highpass?: number;
+};
+
+/** Semburan white-noise pendek, untuk suara retak/pecah. */
+function noise({
+  duration = 0.1,
+  volume = 0.4,
+  delay = 0,
+  highpass = 1500,
+}: NoiseOptions = {}): void {
+  const context = getCtx();
+  if (!context || !masterGain) return;
+
+  const start = context.currentTime + delay;
+  const length = Math.max(1, Math.floor(context.sampleRate * duration));
+  const buffer = context.createBuffer(1, length, context.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+
+  const src = context.createBufferSource();
+  src.buffer = buffer;
+
+  const filter = context.createBiquadFilter();
+  filter.type = "highpass";
+  filter.frequency.value = highpass;
+
+  const gain = context.createGain();
+  gain.gain.setValueAtTime(volume, start);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(masterGain);
+  src.start(start);
+  src.stop(start + duration + 0.02);
+}
+
 const SOUND_PRESETS: Record<SoundName, () => void> = {
-  blip: () => tone({ freq: 440 + Math.random() * 60, duration: 0.03, volume: 0.22 }),
+  // Voice teks: blip square sangat pendek, nada tetap (tanpa jitter acak),
+  // diputar di tiap huruf sehingga terdengar seperti "bip-bip-bip" game aslinya.
+  blip: () => tone({ freq: 520, duration: 0.022, type: "square", volume: 0.2 }),
   move: () => tone({ freq: 660, duration: 0.05, volume: 0.35 }),
   select: () => {
     tone({ freq: 660, duration: 0.05, volume: 0.4 });
@@ -128,6 +178,58 @@ const SOUND_PRESETS: Record<SoundName, () => void> = {
   turn: () => {
     tone({ freq: 392, duration: 0.07, volume: 0.3 });
     tone({ freq: 523, duration: 0.12, volume: 0.3, delay: 0.07 });
+  },
+  break: () => {
+    // suara pecahan kristal: nada tinggi cepat turun + noise klik
+    tone({ freq: 1200, duration: 0.05, type: "triangle", volume: 0.4 });
+    tone({ freq: 800, duration: 0.06, type: "triangle", volume: 0.35, delay: 0.05 });
+    tone({ freq: 500, duration: 0.1, type: "square", volume: 0.25, delay: 0.1 });
+  },
+  alert: () => tone({ freq: 1046, duration: 0.09, type: "square", volume: 0.4 }),
+  fall: () => {
+    // soul meluncur: nada turun panjang, seperti suara masuk ke battle
+    tone({ freq: 900, duration: 0.65, type: "square", volume: 0.28, sweepTo: 120 });
+    tone({ freq: 450, duration: 0.65, type: "triangle", volume: 0.25, sweepTo: 60 });
+  },
+  crack: () => {
+    // retakan tajam: klik noise + nada tinggi jatuh cepat
+    noise({ duration: 0.05, volume: 0.55, highpass: 2500 });
+    tone({ freq: 1500, duration: 0.07, type: "square", volume: 0.45, sweepTo: 300 });
+  },
+  shatter: () => {
+    // ledakan kaca + serpihan berdenting, selaras dengan jeda 45 ms tiap serpihan
+    noise({ duration: 0.28, volume: 0.5, highpass: 3000 });
+    for (let i = 0; i < 9; i++) {
+      tone({
+        freq: 1600 + Math.random() * 2600,
+        duration: 0.05 + Math.random() * 0.08,
+        type: "triangle",
+        volume: 0.22,
+        delay: 0.02 + i * 0.045,
+        sweepTo: 700 + Math.random() * 500,
+      });
+    }
+  },
+  gameover: () => {
+    // tema pelan: turun murung (E-D-C-B), lalu naik jadi akor A minor "determination"
+    const melody: [number, number, number][] = [
+      [330, 0.5, 0],
+      [294, 0.5, 0.5],
+      [262, 0.5, 1.0],
+      [247, 0.45, 1.5],
+    ];
+    melody.forEach(([freq, duration, delay]) => {
+      tone({ freq, duration, type: "triangle", volume: 0.32, delay });
+      tone({ freq: freq / 2, duration, type: "square", volume: 0.08, delay });
+    });
+
+    tone({ freq: 262, duration: 0.3, type: "triangle", volume: 0.32, delay: 2.0 });
+    tone({ freq: 330, duration: 0.3, type: "triangle", volume: 0.32, delay: 2.3 });
+    // akor akhir A minor
+    [220, 262, 330, 440].forEach((freq) =>
+      tone({ freq, duration: 0.9, type: "triangle", volume: 0.26, delay: 2.6 })
+    );
+    tone({ freq: 110, duration: 0.9, type: "square", volume: 0.1, delay: 2.6 });
   },
 };
 

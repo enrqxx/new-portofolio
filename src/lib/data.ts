@@ -160,12 +160,12 @@ export const CONTACT = {
   mercyText:
     "* Kamu bisa menghubunginya. Dia tidak akan menolak percakapan yang ramah.",
   spareLine: "* You feel like reaching out.",
-  email: "hello@example.com",
+  email: "yusyfi.fuada@gmail.com",
   socials: [
-    { label: "GITHUB", url: "https://github.com" },
-    { label: "LINKEDIN", url: "https://linkedin.com" },
-    { label: "TWITTER", url: "https://twitter.com" },
-    { label: "EMAIL", url: "mailto:hello@example.com" },
+    { label: "GITHUB", url: "https://github.com/enrqxx" },
+    { label: "LINKEDIN", url: "https://www.linkedin.com/in/yusyfi-fuada/" },
+    { label: "WHATSAPP", url: "https://api.whatsapp.com/send?phone=6281322601499&text=Hello,%20Yusyfi" },
+    { label: "EMAIL", url: "mailto:yusyfi.fuada@gmail.com" },
   ],
 };
 
