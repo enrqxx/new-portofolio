@@ -30,12 +30,17 @@ type SoundContextValue = {
   muted: boolean;
   toggleMute: () => void;
   play: (name: SoundName) => void;
+  /** true = BGM ditahan sementara (mis. saat layar Game Over), terpisah dari mute. */
+  bgmPaused: boolean;
+  setBgmPaused: (paused: boolean) => void;
 };
 
 const SoundContext = createContext<SoundContextValue | null>(null);
 
 export function SoundProvider({ children }: { children: ReactNode }) {
   const [muted, setMuted] = useState(false);
+  const [bgmPaused, setBgmPausedState] = useState(false);
+  const setBgmPaused = useCallback((paused: boolean) => setBgmPausedState(paused), []);
 
   // Ambil preferensi mute dari localStorage (client-only).
   useEffect(() => {
@@ -75,8 +80,8 @@ export function SoundProvider({ children }: { children: ReactNode }) {
   }, [muted]);
 
   const value = useMemo(
-    () => ({ muted, toggleMute, play }),
-    [muted, toggleMute, play]
+    () => ({ muted, toggleMute, play, bgmPaused, setBgmPaused }),
+    [muted, toggleMute, play, bgmPaused, setBgmPaused]
   );
 
   return <SoundContext.Provider value={value}>{children}</SoundContext.Provider>;
@@ -90,6 +95,8 @@ export function useSound(): SoundContextValue {
       muted: false,
       toggleMute: () => {},
       play: () => {},
+      bgmPaused: false,
+      setBgmPaused: () => {},
     };
   }
   return ctx;

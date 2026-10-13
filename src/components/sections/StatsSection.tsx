@@ -106,10 +106,8 @@ export default function StatsSection() {
 
   return (
     <section id="skills" className="ut-section">
-      <div className="ut-section__head">
-        <h2 className="ut-section__title">STATS</h2>
-        <p className="ut-section__sub">* SKILLS &amp; ABILITIES</p>
-      </div>
+      {/* Judul disembunyikan dari tampilan, tapi tetap ada untuk screen reader & SEO */}
+      <h2 className="sr-only">Stats — Skills &amp; Abilities</h2>
 
       <BattleBox>
         <div className="ut-stat-row ut-stat-row--lv">

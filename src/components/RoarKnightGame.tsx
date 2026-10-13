@@ -1228,15 +1228,25 @@ const CSS = `
 `;
 
 export default function RoarKnightGame() {
-  const { play } = useSound();
+  const { play, setBgmPaused } = useSound();
   const playRef = useRef(play);
-  playRef.current = play;
-
+  const bgmRef = useRef(setBgmPaused);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bossRef = useRef<HTMLImageElement>(null);
   const engineRef = useRef<Engine | null>(null);
 
+  // Update ref di effect, bukan saat render (aturan react-hooks)
+  useEffect(() => {
+    playRef.current = play;
+    bgmRef.current = setBgmPaused;
+  }, [play, setBgmPaused]);
+
   const [phase, setPhase] = useState<Phase>("intro");
+  useEffect(() => {
+    bgmRef.current(phase === "lost");
+  }, [phase]);
+  // pastikan BGM tidak tertahan kalau komponen ditinggalkan saat game over
+  useEffect(() => () => bgmRef.current(false), []);
   const [menuIdx, setMenuIdx] = useState(0);
   const [subIdx, setSubIdx] = useState(0);
   const [text, setText] = useState("");
@@ -1249,7 +1259,9 @@ export default function RoarKnightGame() {
 
   // cermin state terbaru untuk handler keyboard & callback engine
   const ui = useRef({ phase, menuIdx, subIdx, items });
-  ui.current = { phase, menuIdx, subIdx, items };
+  useEffect(() => {
+    ui.current = { phase, menuIdx, subIdx, items };
+  }, [phase, menuIdx, subIdx, items]);
 
   const showText = (t: string) => {
     typed.current = false;
@@ -1363,7 +1375,9 @@ export default function RoarKnightGame() {
 
   // fungsi terbaru diakses engine / keyboard lewat ref (hindari closure basi)
   const fns = useRef({ beginEnemyTurn, backToMenu, startBattle, confirmMenu, doAct, doItem, advanceDialog });
-  fns.current = { beginEnemyTurn, backToMenu, startBattle, confirmMenu, doAct, doItem, advanceDialog };
+  useEffect(() => {
+    fns.current = { beginEnemyTurn, backToMenu, startBattle, confirmMenu, doAct, doItem, advanceDialog };
+  }, [beginEnemyTurn, backToMenu, startBattle, confirmMenu, doAct, doItem, advanceDialog]);
 
   /* ---------- engine ---------- */
   useEffect(() => {

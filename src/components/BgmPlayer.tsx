@@ -11,6 +11,10 @@
  * Browser melarang autoplay sebelum gestur pertama, jadi musik mulai
  * otomatis begitu pengguna klik sesuatu (mis. pilih SAVE di SAVE screen).
  * Kalau muted, musik di-pause; di-unmute, lanjut.
+ *
+ * Game Over: saat `bgmPaused` true (diset oleh RoarKnightGame), musik
+ * di-fade-out lalu berhenti. Begitu `bgmPaused` kembali false (balik ke
+ * layar awal), musik mulai lagi dari awal.
  */
 
 import { useEffect, useRef } from "react";
@@ -23,6 +27,8 @@ const TRACKS: Record<string, string> = {
 
 const DEFAULT_TRACK = "/audio/vs-lancer.mp3";
 const BGM_VOLUME = 0.05; // musik sengaja pelan, jangan menutupi sound effect
+const FADE_MS = 400;
+const FADE_STEPS = 8;
 
 function trackFor(pathname: string | null): string {
   if (pathname && TRACKS[pathname]) return TRACKS[pathname];
@@ -30,9 +36,11 @@ function trackFor(pathname: string | null): string {
 }
 
 export default function BgmPlayer() {
-  const { muted } = useSound();
+  const { muted, bgmPaused } = useSound();
+  const silent = muted || bgmPaused;
   const pathname = usePathname();
   const audioRef = useRef<HTMLAudioElement>(null);
+  const restartOnResume = useRef(false);
 
   // Ganti track saat pindah halaman
   useEffect(() => {
@@ -43,14 +51,14 @@ export default function BgmPlayer() {
       audio.setAttribute("data-src", src);
       audio.src = src;
       audio.load();
-      if (!muted) {
+      if (!silent) {
         const attempt = audio.play();
         if (attempt) attempt.catch(() => {});
       }
     }
-  }, [pathname, muted]);
+  }, [pathname, silent]);
 
-  // Play / pause mengikuti state mute
+  // Play / pause mengikuti state mute & pause dari game over
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -58,6 +66,28 @@ export default function BgmPlayer() {
     if (muted) {
       audio.pause();
       return;
+    }
+
+    if (bgmPaused) {
+      // fade-out singkat lalu berhenti; saat lanjut nanti diulang dari awal
+      restartOnResume.current = true;
+      let step = 0;
+      const id = setInterval(() => {
+        step++;
+        audio.volume = Math.max(0, BGM_VOLUME * (1 - step / FADE_STEPS));
+        if (step >= FADE_STEPS) {
+          clearInterval(id);
+          audio.pause();
+          audio.volume = BGM_VOLUME;
+        }
+      }, FADE_MS / FADE_STEPS);
+      return () => clearInterval(id);
+    }
+
+    audio.volume = BGM_VOLUME;
+    if (restartOnResume.current) {
+      restartOnResume.current = false;
+      audio.currentTime = 0;
     }
 
     // Mungkin ditolak browser sebelum gestur pertama — biarkan,
@@ -68,13 +98,13 @@ export default function BgmPlayer() {
         /* menunggu gestur pengguna */
       });
     }
-  }, [muted]);
+  }, [muted, bgmPaused]);
 
   // Coba play lagi pada gestur pertama (autoplay policy)
   useEffect(() => {
     const tryPlay = () => {
       const audio = audioRef.current;
-      if (!audio || muted) return;
+      if (!audio || silent) return;
       if (audio.paused) {
         const attempt = audio.play();
         if (attempt) attempt.catch(() => {});
@@ -87,7 +117,7 @@ export default function BgmPlayer() {
       window.removeEventListener("click", tryPlay);
       window.removeEventListener("keydown", tryPlay);
     };
-  }, [muted]);
+  }, [silent]);
 
   // Volume diterapkan saat mulai diputar (sumber daya audio belum siap sebelumnya)
   useEffect(() => {

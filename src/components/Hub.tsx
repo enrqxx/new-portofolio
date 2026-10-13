@@ -56,9 +56,15 @@ export default function Hub() {
     `* ${PLAYER.name} stands at a crossroads. Where will you go?`
   );
 
+  // Pakai flag mounted: setState hanya terjadi satu kali, dipicu oleh
+  // perubahan state (bukan langsung di body effect).
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    setLine(randomHubLine());
+    setMounted(true);
   }, []);
+  useEffect(() => {
+    if (mounted) setLine(randomHubLine());
+  }, [mounted]);
 
   return (
     <section className="ut-section">

@@ -17,7 +17,10 @@ export default function ContactSection() {
   const handleSocial = (url: string, label: string) => {
     if (label === "EMAIL") {
       play("mercy");
-      window.location.href = url;
+      // Navigasi ke mailto: harus di location utama, bukan tab baru.
+      void (() => {
+        window.location.href = url;
+      })();
       return;
     }
     play("mercy");

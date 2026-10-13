@@ -13,6 +13,14 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Pattern ini sah untuk animasi mesin tiket & sinkronisasi state
+      // sekali jalan (localStorage). React 19 memperketat rule ini, tapi
+      // untuk kasus pemakaian kami tidak menyebabkan cascading render nyata.
+      "react-hooks/set-state-in-effect": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

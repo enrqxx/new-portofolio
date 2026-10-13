@@ -4,19 +4,20 @@
  * Efek mesin tiket khas game retro: huruf muncul satu per satu
  * dengan bunyi blip. Mengikuti perilaku teks dialog Undertale:
  *
- * - Bunyi blip pada setiap huruf (spasi & tanda baca hening), seperti
- *   "voice" teks di game
+ * - Bunyi blip setiap beberapa huruf (tidak setiap huruf, biar tidak bikin geli)
  * - Tanda baca membuat jeda lebih lama
  * - Bisa diskip dengan klik/spasi (cepatkan ke teks penuh)
  * - Memanggil onComplete setelah selesai
+ *
+ * Catatan: komponen ini mengandalkan `key` dari parent untuk reset
+ * saat text berubah (pattern React 19 yang clean, tanpa ref di render).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSound } from "@/components/providers/SoundProvider";
 
+const BLIP_EVERY = 3; // bunyi blip tiap N huruf
 const PUNCTUATION = new Set([".", ",", "!", "?", ";", ":"]);
-// Karakter yang tidak mengeluarkan bunyi (di Undertale spasi & tanda baca hening)
-const SILENT_CHARS = new Set([" ", ...PUNCTUATION]);
 
 export default function TypewriterText({
   text,
@@ -36,11 +37,14 @@ export default function TypewriterText({
   as?: React.ElementType;
 }) {
   const { play, muted } = useSound();
-  const [displayed, setDisplayed] = useState("");
-  const [done, setDone] = useState(false);
+  // `tick` naik tiap huruf; `displayed` & `done` diturunkan darinya.
+  const [tick, setTick] = useState(0);
   const indexRef = useRef(0);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const completedRef = useRef(false);
+
+  const displayed = tick <= text.length ? text.slice(0, tick) : text;
+  const done = tick >= text.length && text.length > 0;
 
   const clearAll = useCallback(() => {
     timeoutsRef.current.forEach(clearTimeout);
@@ -49,18 +53,18 @@ export default function TypewriterText({
 
   const finish = useCallback(() => {
     clearAll();
-    setDisplayed(text);
-    setDone(true);
+    indexRef.current = text.length;
+    setTick(text.length);
     if (!completedRef.current) {
       completedRef.current = true;
       onComplete?.();
     }
   }, [text, onComplete, clearAll]);
 
+  // Satu-satunya effect animasi. `text` sebagai dependency memicu
+  // ulang animasi tiap kali parent mengganti text (biasanya via key).
   useEffect(() => {
     completedRef.current = false;
-    setDone(false);
-    setDisplayed("");
     indexRef.current = 0;
 
     if (!text) {
@@ -69,7 +73,7 @@ export default function TypewriterText({
     }
 
     const start = setTimeout(() => {
-      const tick = () => {
+      const step = () => {
         if (indexRef.current >= text.length) {
           finish();
           return;
@@ -77,23 +81,28 @@ export default function TypewriterText({
 
         const nextIndex = indexRef.current + 1;
         indexRef.current = nextIndex;
-        setDisplayed(text.slice(0, nextIndex));
+        setTick(nextIndex);
 
         const char = text[nextIndex - 1];
 
-        // Blip di setiap huruf, kecuali spasi & tanda baca
-        if (soundEnabled && !muted && !SILENT_CHARS.has(char)) {
+        // Bunyi blip periodik
+        if (
+          soundEnabled &&
+          !muted &&
+          nextIndex % BLIP_EVERY === 0 &&
+          nextIndex <= text.length
+        ) {
           play("blip");
         }
 
         // Jeda lebih lama setelah tanda baca
         const delay = PUNCTUATION.has(char) ? speed * 6 : speed;
 
-        const t = setTimeout(tick, delay);
+        const t = setTimeout(step, delay);
         timeoutsRef.current.push(t);
       };
 
-      tick();
+      step();
     }, startDelay);
 
     timeoutsRef.current.push(start);
@@ -105,10 +114,6 @@ export default function TypewriterText({
   // Klik / spasi untuk skip
   useEffect(() => {
     const handleSkip = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) {
-        return;
-      }
       if (e.key === " " || e.key === "Enter") {
         if (!completedRef.current) {
           e.preventDefault();

@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎮 Yusyfi — Undertale Portfolio
 
-## Getting Started
+Portfolio pribadi bertema **Undertale**, dibangun dengan Next.js 16 (App Router), React 19, dan Tailwind CSS v4. Semua suara dibuat secara prosedural lewat Web Audio API — zero audio asset untuk SFX.
 
-First, run the development server:
+## ✨ Fitur
+
+- **SAVE screen pembuka** — "* You're filled with DETERMINATION." + menu SAVE / CONTINUE / RESET (keyboard & mouse)
+- **Game Over animation** — soul bergetar, retak, pecah, lalu "STAY DETERMINED!" saat RESET
+- **5 section utama** (multi-page, bukan landing page):
+  - `/about` — **CHECK** — about + stats (ATK/DEF/SPD/DEX)
+  - `/skills` — **STATS** — skill sebagai menu ITEM ala Undertale (icon-only, tanpa bar)
+  - `/projects` — **ENCOUNTERS** — project sebagai enemy encounter
+  - `/experience` — **JOURNEY** — riwayat dalam bentuk dialog
+  - `/contact` — **MERCY** — kontak + WhatsApp + email
+- **Mini game rahasia** di `/roar` — **The Roaring Knight** (boss Deltarune), bullet-hell battle dengan canvas engine
+- **Sound engine prosedural** — blip, move, select, hurt, heal, save, encounter, mercy, crack, shatter, gameover
+- **BGM route-aware** — "Vs. Lancer" (default) & "Roaring Knight" (di halaman game), volume 5%
+- **Pixel art UI** — Press Start 2P + VT323 fonts, scanlines CRT, soul hati merah, battle box
+
+## 🎯 Cara main
+
+| Kontrol | Fungsi |
+|---|---|
+| **← → ↑ ↓** | Navigasi menu / gerak SOUL |
+| **Z / Enter** | Confirm / serang |
+| **X / Shift / Esc** | Cancel / kembali |
+| **Klik** | Semua juga bisa pakai mouse |
+
+## 🛠️ Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+```
 
-## Learn More
+## 🚀 Deploy ke Vercel
 
-To learn more about Next.js, take a look at the following resources:
+Project ini siap deploy tanpa konfigurasi tambahan:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Push repository ke GitHub
+2. Buka [vercel.com/new](https://vercel.com/new) lalu import repository
+3. Klik **Deploy** — tidak perlu setting env variable
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Atau pakai Vercel CLI:
 
-## Deploy on Vercel
+```bash
+npm i -g vercel
+vercel
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📁 Struktur
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+├── app/
+│   ├── (game)/            # Route group: about, skills, projects, experience, contact, roar
+│   ├── layout.tsx         # Root layout: fonts, SoundProvider, BgmPlayer
+│   ├── page.tsx           # SAVE screen + Hub
+│   └── globals.css        # Theme Undertale (colors, animations, battle box)
+├── components/
+│   ├── sections/          # 5 section utama
+│   ├── ui/                # SoulHeart, TypewriterText, HealthBar, icons
+│   ├── providers/         # SoundProvider
+│   ├── SaveScreen.tsx
+│   ├── GameOver.tsx
+│   ├── Hub.tsx
+│   ├── FloatingHud.tsx    # HP bar + mute + now playing
+│   ├── BgmPlayer.tsx      # BGM route-aware
+│   └── RoarKnightGame.tsx # Mini game (canvas engine)
+└── lib/
+    ├── data.ts            # SEMUA konten portfolio (nama, skills, projects, kontak)
+    └── sound.ts           # Sound engine prosedural
+```
+
+## ✏️ Customize
+
+Semua konten ada di **`src/lib/data.ts`** — nama, role, avatar, skills, projects, journey, kontak, dan teks SAVE screen. Ganti di situ saja, langsung tersimpan ke seluruh halaman.
+
+Ganti avatar: timpa `public/img/avatar.jpeg`.
+
+Ganti BGM: timpa `public/audio/vs-lancer.mp3` & `public/audio/roaring-knight.mp3`.
+
+## 📝 Catatan
+
+- Browser membatasi autoplay audio, jadi BGM & SFX baru mulai setelah klik pertama (SAVE screen)
+- Preferensi mute disimpan di `localStorage`
+- Mini game di `/roar` pakai canvas + `requestAnimationFrame`, state di luar React untuk performa
