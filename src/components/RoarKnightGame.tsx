@@ -1411,6 +1411,48 @@ export default function RoarKnightGame() {
     };
   }, []);
 
+  /* ---------- datang dari transisi encounter → langsung bertarung ---------- */
+  useEffect(() => {
+    const KEY = "encounter:pending"; // sama dengan ENCOUNTER_KEY di EncounterProvider
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem(KEY);
+    } catch {
+      /* abaikan */
+    }
+    if (!raw) return; // buka langsung via URL → tetap tampilkan layar intro + tombol FIGHT
+
+    const [state, ts] = raw.split(":");
+    if (Date.now() - Number(ts) > 10000) {
+      try {
+        sessionStorage.removeItem(KEY);
+      } catch {
+        /* abaikan */
+      }
+      return; // penanda basi
+    }
+
+    let done = false;
+    const fire = () => {
+      if (done) return;
+      done = true;
+      try {
+        sessionStorage.removeItem(KEY);
+      } catch {
+        /* abaikan */
+      }
+      fns.current.startBattle();
+    };
+
+    window.addEventListener("encounter:reveal", fire);
+    // cadangan kalau event terlewat
+    const t = setTimeout(fire, state === "go" ? 0 : 2500);
+    return () => {
+      window.removeEventListener("encounter:reveal", fire);
+      clearTimeout(t);
+    };
+  }, []);
+
   /* ---------- keyboard ---------- */
   useEffect(() => {
     const ARROWS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];

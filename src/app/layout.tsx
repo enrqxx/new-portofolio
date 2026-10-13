@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Press_Start_2P, VT323 } from "next/font/google";
 import { SoundProvider } from "@/components/providers/SoundProvider";
 import BgmPlayer from "@/components/BgmPlayer";
+import { EncounterProvider } from "@/components/providers/EncounterProvider";
 import "./globals.css";
 
 const pixel = Press_Start_2P({
@@ -34,7 +35,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         <SoundProvider>
           <BgmPlayer />
-          {children}
+          <EncounterProvider>{children}</EncounterProvider>
         </SoundProvider>
       </body>
     </html>
