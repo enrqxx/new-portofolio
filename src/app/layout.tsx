@@ -19,7 +19,7 @@ const terminal = VT323({
 });
 
 export const metadata: Metadata = {
-  title: "FRISK — Portfolio | Filled with DETERMINATION",
+  title: "Yusyfi — Portfolio | Filled with DETERMINATION",
   description:
     "A Undertale-themed portfolio. CHECK the about, inspect the STATS, encounter PROJECTS, walk the JOURNEY, and show some MERCY.",
   keywords: ["portfolio", "undertale", "web developer", "next.js"],
