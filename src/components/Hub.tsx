@@ -41,6 +41,11 @@ const DESTINATIONS = [
     title: "MERCY",
     desc: "* Contact — spare a hello",
   },
+  {
+    href: "/roar",
+    title: "THE ROAR",
+    desc: "* Secret boss — survive the knight",
+  },
 ] as const;
 
 export default function Hub() {

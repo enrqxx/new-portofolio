@@ -2,16 +2,25 @@
 
 /**
  * HUD melayang — elemen UI game yang menempel di pojok layar:
- * HP bar + nama & LV di kiri bawah, tombol mute di kanan atas.
- * Tidak ada navbar lagi; navigasi lewat hub dan tombol BACK.
+ * HP bar + nama & LV di kiri bawah, tombol mute + now playing di kanan atas.
+ * Nama track mengikuti halaman yang sedang dibuka.
  */
 
+import { usePathname } from "next/navigation";
 import SoulHeart from "@/components/ui/SoulHeart";
 import { useSound } from "@/components/providers/SoundProvider";
 import { PLAYER } from "@/lib/data";
 
+const TRACK_NAMES: Record<string, string> = {
+  "/roar": "ROARING KNIGHT",
+};
+
+const DEFAULT_TRACK_NAME = "VS. LANCER";
+
 export default function FloatingHud() {
   const { muted, toggleMute, play } = useSound();
+  const pathname = usePathname();
+  const trackName = (pathname && TRACK_NAMES[pathname]) || DEFAULT_TRACK_NAME;
 
   return (
     <>
@@ -33,13 +42,13 @@ export default function FloatingHud() {
         </span>
       </div>
 
-      {/* Mute pojok kanan atas */}
+      {/* Mute + now playing pojok kanan atas */}
       <div className="ut-float-mute-group">
         <span className="ut-float-track" title="Now playing">
           <span className="ut-float-track__note" aria-hidden="true">
             {muted ? "♪̸" : "♪"}
           </span>
-          <span className="ut-float-track__name">VS. LANCER</span>
+          <span className="ut-float-track__name">{trackName}</span>
         </span>
         <button
           type="button"

@@ -1,31 +1,54 @@
 "use client";
 
 /**
- * Background music — loop track retro, dikontrol oleh volume bar & tombol
- * mute yang sama dengan sound effect (lewat SoundProvider).
+ * Background music — loop track retro, dikontrol oleh tombol mute yang sama
+ * dengan sound effect (lewat SoundProvider).
+ *
+ * Track yang diputar tergantung halaman:
+ *  - /roar (mini game) → "Roaring Knight" (boss theme)
+ *  - lainnya           → "Vs. Lancer" (default)
  *
  * Browser melarang autoplay sebelum gestur pertama, jadi musik mulai
  * otomatis begitu pengguna klik sesuatu (mis. pilih SAVE di SAVE screen).
- * Kalau muted/volume 0, musik di-pause; di-unmute, lanjut.
+ * Kalau muted, musik di-pause; di-unmute, lanjut.
  */
 
 import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { useSound } from "@/components/providers/SoundProvider";
 
-const TRACK_SRC = "/audio/vs-lancer.mp3";
-// Musik sengaja pelan (5%) — background saja, jangan menutupi sound effect.
-const BGM_VOLUME = 0.05;
+const TRACKS: Record<string, string> = {
+  "/roar": "/audio/roaring-knight.mp3",
+};
+
+const DEFAULT_TRACK = "/audio/vs-lancer.mp3";
+const BGM_VOLUME = 0.05; // musik sengaja pelan, jangan menutupi sound effect
+
+function trackFor(pathname: string | null): string {
+  if (pathname && TRACKS[pathname]) return TRACKS[pathname];
+  return DEFAULT_TRACK;
+}
 
 export default function BgmPlayer() {
   const { muted } = useSound();
+  const pathname = usePathname();
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Terapkan volume ke elemen audio
+  // Ganti track saat pindah halaman
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.volume = muted ? 0 : BGM_VOLUME;
-  }, [muted]);
+    const src = trackFor(pathname);
+    if (audio.getAttribute("data-src") !== src) {
+      audio.setAttribute("data-src", src);
+      audio.src = src;
+      audio.load();
+      if (!muted) {
+        const attempt = audio.play();
+        if (attempt) attempt.catch(() => {});
+      }
+    }
+  }, [pathname, muted]);
 
   // Play / pause mengikuti state mute
   useEffect(() => {
@@ -66,7 +89,26 @@ export default function BgmPlayer() {
     };
   }, [muted]);
 
+  // Volume diterapkan saat mulai diputar (sumber daya audio belum siap sebelumnya)
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const apply = () => {
+      audio.volume = BGM_VOLUME;
+    };
+    apply();
+    audio.addEventListener("canplay", apply);
+    return () => audio.removeEventListener("canplay", apply);
+  }, []);
+
   return (
-    <audio ref={audioRef} src={TRACK_SRC} preload="auto" loop aria-hidden="true" />
+    <audio
+      ref={audioRef}
+      src={trackFor(pathname)}
+      data-src={trackFor(pathname)}
+      preload="auto"
+      loop
+      aria-hidden="true"
+    />
   );
 }

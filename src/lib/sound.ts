@@ -19,6 +19,8 @@ export type SoundName =
   | "mercy" // spare sting
   | "turn" // end of turn / transition
   | "break" // soul shatter (game over)
+  | "slash" // tebasan pedang (Knight / FIGHT)
+  | "roar" // raungan Roaring Knight
   | "alert" // "!" muncul saat encounter
   | "fall" // soul meluncur ke bawah saat encounter
   | "crack" // soul cracks in half (game over, step 2)
@@ -184,6 +186,15 @@ const SOUND_PRESETS: Record<SoundName, () => void> = {
     tone({ freq: 1200, duration: 0.05, type: "triangle", volume: 0.4 });
     tone({ freq: 800, duration: 0.06, type: "triangle", volume: 0.35, delay: 0.05 });
     tone({ freq: 500, duration: 0.1, type: "square", volume: 0.25, delay: 0.1 });
+  },
+  slash: () => {
+    noise({ duration: 0.12, volume: 0.45, highpass: 2200 });
+    tone({ freq: 1400, duration: 0.1, type: "triangle", volume: 0.3, sweepTo: 200 });
+  },
+  roar: () => {
+    noise({ duration: 0.7, volume: 0.4, highpass: 250 });
+    tone({ freq: 95, duration: 0.8, type: "sawtooth", volume: 0.45, sweepTo: 42 });
+    tone({ freq: 190, duration: 0.55, type: "square", volume: 0.25, delay: 0.08, sweepTo: 60 });
   },
   alert: () => tone({ freq: 1046, duration: 0.09, type: "square", volume: 0.4 }),
   fall: () => {
