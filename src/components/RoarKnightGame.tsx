@@ -42,6 +42,11 @@ const BOSS_MAX_HP = 100;
 const NOVA_THRESHOLD = 75; // HP% Knight saat Crystal Nova terpicu
 const MAX_HIT = 11; // damage FIGHT maksimum (tengah target)
 
+const DUST_FRAMES = 150; // lama Knight hancur menjadi debu
+const DUST_FADE = 45; // umur tiap butir setelah mulai terlepas
+const DUST_STEP = 1; // ukuran butir (px canvas) — sprite 180x146, jadi 1 butir = 1 piksel sprite
+const DUST_LEVELS = 8; // jumlah tingkat abu-abu
+
 const FINGER = { x: 372, y: 74 }; // sisi kanan Knight (asal Star Show)
 
 /* ====================================================================
@@ -52,7 +57,8 @@ type Rect = { x: number; y: number; w: number; h: number };
 type PlayFn = ReturnType<typeof useSound>["play"];
 type AttackKind = "barrage" | "knife" | "rend" | "tunnel" | "sanguine" | "nova";
 type Pose = "idle" | "point" | "raise" | "vanish" | "glow" | "center";
-type EngineMode = "idle" | "enemy" | "bar" | "resolve";
+type EngineMode = "idle" | "enemy" | "bar" | "resolve" | "dust";
+type DustP = { x: number; y: number; vx: number; vy: number; d: number };
 
 type Bullet = {
   k: "b";
@@ -177,6 +183,8 @@ class Engine {
   // fight bar
   private bar = { x: 0, delay: 0, stopped: false, dmg: 0, finisher: false, crit: false };
   private rt = 0; // timer fase resolve
+  private dust: { levels: DustP[][]; t: number } | null = null;
+  private gone = false; // Knight sudah hancur → sprite DOM tetap tersembunyi
   private dmgNum: { t: number; text: string } = { t: -1, text: "" };
 
   constructor(
@@ -238,6 +246,8 @@ class Engine {
     this.flash = 0;
     this.shake = 0;
     this.hpShow = 0;
+    this.dust = null;
+    this.gone = false;
     this.board = { ...BOX_DEFAULT };
     this.target = { ...BOX_DEFAULT };
   }
@@ -387,6 +397,7 @@ class Engine {
     if (this.mode === "enemy") this.stepEnemy();
     else if (this.mode === "bar") this.stepBar();
     else if (this.mode === "resolve") this.stepResolve();
+    else if (this.mode === "dust") this.stepDust();
   }
 
   private stepEnemy() {
@@ -592,11 +603,107 @@ class Engine {
     }
     if (this.dmgNum.t >= 0) this.dmgNum.t++;
     if (this.rt >= 110) {
-      this.mode = "idle";
       this.target = { ...BOX_DEFAULT };
       this.dmgNum.t = -1;
+      if (this.bossHp <= 0) {
+        this.startDust(); // boss kalah → hancur jadi debu, lalu onFightDone
+        return;
+      }
+      this.mode = "idle";
       this.cb.onFightDone();
     }
+  }
+
+  /* ---------- Knight hancur jadi debu ---------- */
+
+  private startDust() {
+    const el = this.bossEl;
+    const finish = () => {
+      this.gone = true;
+      this.dust = null;
+      this.mode = "idle";
+      this.cb.onFightDone();
+    };
+    if (!el || !el.naturalWidth || this.reduce) return finish();
+
+    // posisi sprite saat ini, dikonversi ke koordinat canvas
+    const cr = this.ctx.canvas.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    const k = W / cr.width;
+    const rx = (er.left - cr.left) * k;
+    const ry = (er.top - cr.top) * k;
+    const rw = Math.max(1, Math.round(er.width * k));
+    const rh = Math.max(1, Math.round(er.height * k));
+
+    let data: Uint8ClampedArray;
+    try {
+      const off = document.createElement("canvas");
+      off.width = rw;
+      off.height = rh;
+      const oc = off.getContext("2d", { willReadFrequently: true });
+      if (!oc) return finish();
+      oc.imageSmoothingEnabled = false;
+      oc.drawImage(el, 0, 0, rw, rh);
+      data = oc.getImageData(0, 0, rw, rh).data;
+    } catch {
+      return finish();
+    }
+
+    // hitam pekat = transparan (sprite di-blend "screen"), sisanya jadi butir debu abu-abu
+    const levels: DustP[][] = Array.from({ length: DUST_LEVELS }, () => []);
+    for (let y = 0; y < rh; y += DUST_STEP) {
+      for (let x = 0; x < rw; x += DUST_STEP) {
+        const i = (y * rw + x) * 4;
+        if (data[i + 3] < 40) continue;
+        const lum = (data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11) / 255;
+        if (lum < 0.12) continue;
+        const lv = Math.min(DUST_LEVELS - 1, Math.floor(lum * DUST_LEVELS));
+        levels[lv].push({
+          x: rx + x,
+          y: ry + y,
+          vx: 0.35 + Math.random() * 0.9,
+          vy: -(0.15 + Math.random() * 0.75),
+          d: ((y / rh) * 0.55 + Math.random() * 0.25) * DUST_FRAMES, // dari atas ke bawah
+        });
+      }
+    }
+
+    this.gone = true;
+    this.dust = { levels, t: 0 };
+    this.mode = "dust";
+    this.play("shatter");
+  }
+
+  private stepDust() {
+    if (!this.dust) return;
+    this.dust.t++;
+    if (this.dust.t >= DUST_FRAMES + DUST_FADE + 15) {
+      this.dust = null;
+      this.mode = "idle";
+      this.cb.onFightDone();
+    }
+  }
+
+  private drawDust() {
+    const d = this.dust;
+    if (!d) return;
+    const c = this.ctx;
+    c.save();
+    d.levels.forEach((group, lv) => {
+      const g = Math.round(90 + (lv / (DUST_LEVELS - 1)) * 165);
+      c.fillStyle = `rgb(${g},${g},${g})`;
+      for (const p of group) {
+        const age = d.t - p.d;
+        if (age < 0) {
+          c.globalAlpha = 1;
+          c.fillRect(p.x, p.y, DUST_STEP, DUST_STEP);
+        } else if (age < DUST_FADE) {
+          c.globalAlpha = 1 - age / DUST_FADE;
+          c.fillRect(p.x + p.vx * age, p.y + p.vy * age, DUST_STEP, DUST_STEP);
+        }
+      }
+    });
+    c.restore();
   }
 
   /* ---------- render ---------- */
@@ -612,6 +719,7 @@ class Engine {
     }
 
     this.drawBoss();
+    this.drawDust();
     this.drawBoard();
     if (this.mode === "bar" || (this.mode === "resolve" && this.rt < 110)) this.drawBar();
     for (const h of this.hazards) this.drawHazard(h);
@@ -650,9 +758,13 @@ class Engine {
       const jx = this.shake > 0 && !this.reduce ? (Math.random() - 0.5) * this.shake * 1.6 : 0;
       const jy = this.shake > 0 && !this.reduce ? (Math.random() - 0.5) * this.shake * 1.6 : 0;
       el.style.transform = `translate(${hit + jx}px, calc(${bob + jy}px + ${this.bossY}%))`;
-      el.style.opacity = this.pose === "vanish" ? "0" : "1";
+      el.style.opacity = this.pose === "vanish" || this.gone ? "0" : "1";
       el.style.filter =
-        glowOn ? "drop-shadow(0 0 8px #b896ff) brightness(1.25)" : "none";
+        this.bossHp <= 0 && !this.gone
+          ? "grayscale(1) brightness(1.3)" // sekarat: memucat sebelum jadi debu
+          : glowOn
+            ? "drop-shadow(0 0 8px #b896ff) brightness(1.25)"
+            : "none";
     }
   }
 
