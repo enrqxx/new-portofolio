@@ -292,12 +292,20 @@ body::before {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 4rem 1rem 4.5rem;
+  justify-content: safe center;
+  padding: 4rem 1rem 4.75rem;
   opacity: 0;
   pointer-events: none;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ut-stage > .ut-section {
+  max-width: 760px;
+  margin: auto 0;
 }
 
 .ut-stage--entered {
@@ -314,8 +322,18 @@ body::before {
   padding: 1.1rem 1rem 4.5rem;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  overflow: hidden;
+  justify-content: safe center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ut-main > .ut-section {
+  margin-top: auto;
+}
+
+.ut-main > .ut-back {
+  margin-bottom: auto;
 }
 
 /* ===================== FLOATING HUD ===================== */
@@ -724,6 +742,7 @@ body::before {
 
 .ut-equip {
   display: flex;
+  align-items: center;
   gap: 1.25rem;
   flex-wrap: wrap;
   margin-top: 1rem;
@@ -732,6 +751,14 @@ body::before {
   font-family: var(--font-terminal), monospace;
   font-size: 1.05rem;
   color: #c8c8c8;
+}
+
+.ut-equip__item {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
 }
 
 .ut-equip__item,
@@ -918,6 +945,7 @@ body::before {
 }
 
 .ut-link-btn {
+  display: inline-block;
   margin-top: 1rem;
   background: #000;
   border: 3px solid var(--color-ut-soul);
@@ -927,7 +955,12 @@ body::before {
   letter-spacing: 0.1em;
   padding: 0.6rem 1.1rem;
   cursor: pointer;
+  text-decoration: none;
   transition: background 0.12s, color 0.12s;
+}
+
+.ut-link-btn--inline {
+  margin-top: 0;
 }
 
 .ut-link-btn:hover,
@@ -997,6 +1030,19 @@ body::before {
   border-color: #4b8bff;
   color: #4b8bff;
   cursor: default;
+}
+
+.ut-action--cv {
+  border-color: var(--color-ut-hp);
+  color: var(--color-ut-hp);
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+}
+
+.ut-action--cv:hover,
+.ut-action--cv:focus-visible {
+  background: var(--color-ut-hp);
+  color: #000;
 }
 
 /* ===================== JOURNEY ===================== */
@@ -1428,7 +1474,19 @@ body::before {
   letter-spacing: 0.1em;
   padding: 0.65rem 1rem;
   cursor: pointer;
+  text-decoration: none;
   transition: background 0.12s, color 0.12s;
+}
+
+.ut-mercy-btn--cv {
+  border-color: var(--color-ut-hp);
+  color: var(--color-ut-hp);
+}
+
+.ut-mercy-btn--cv:hover,
+.ut-mercy-btn--cv:focus-visible {
+  background: var(--color-ut-hp);
+  color: #000;
 }
 
 .ut-mercy-btn:hover,

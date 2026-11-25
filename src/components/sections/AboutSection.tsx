@@ -10,6 +10,7 @@
 import BattleBox from "@/components/ui/BattleBox";
 import HealthBar from "@/components/ui/HealthBar";
 import TypewriterText from "@/components/ui/TypewriterText";
+import { ShieldIcon } from "@/components/ui/icons";
 import { useSound } from "@/components/providers/SoundProvider";
 import { ABOUT, PLAYER } from "@/lib/data";
 
@@ -72,10 +73,11 @@ export default function AboutSection() {
             ⚔ {PLAYER.weapon}
           </span>
           <span
-            className="ut-equip__item"
+            className="ut-equip__item inline-flex items-center gap-1.5"
             onMouseEnter={() => play("blip")}
           >
-            🛡 {PLAYER.armor}
+            <ShieldIcon className="inline-block h-3.5 w-3.5 shrink-0" />
+            <span>{PLAYER.armor}</span>
           </span>
           <span className="ut-equip__gold">G: {PLAYER.gold}</span>
         </div>

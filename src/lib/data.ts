@@ -11,6 +11,9 @@ export const PLAYER = {
   role: "Web & Mobile Developer",
   // Foto kamu (avatar) — dipakai di section CHECK & SAVE screen
   avatar: "/img/avatar.jpeg",
+  // File CV PDF — disimpan di folder public/
+  cvUrl: "/MuhammadYusyfiFuada-CV.pdf",
+  cvFileName: "MuhammadYusyfiFuada-CV.pdf",
   // LV (Love) — di Undertale ini adalah level kamu. Anggap saja "level karir".
   level: 12,
   // HP maksimum kamu
@@ -28,7 +31,7 @@ export const ABOUT = {
   checkLine: "* A determined developer who builds things with care.",
   // Paragraf panjang untuk flavor text
   description:
-    "Seorang developer yang percaya bahwa kode yang baik adalah kode yang berempati pada penggunanya. Senang membangun antarmuka yang ringan, cepat, dan menyenangkan dipakai. Saat tidak sedang ngoding, biasanya sedang main game, ngopi, atau keduanya sekaligus.",
+    "A developer who believes great code starts with empathy for the people using it. I enjoy crafting interfaces that are fast, lightweight, and genuinely fun to use. When I'm not coding, I'm usually gaming, brewing coffee, or doing both at once.",
   // Flavour text singkat di bawah nama (seperti flavor text enemy)
   flavorText: "* Smells like freshly brewed coffee.",
   stats: [
@@ -72,37 +75,37 @@ export type Project = {
 export const PROJECTS: Project[] = [
   {
     id: "project-1",
-    name: "Project One",
-    enemyName: "THE FIRST ENCOUNTER",
-    description: "Aplikasi web pertama yang benar-benar selesai dan dipakai orang",
+    name: "SiLapak Prestasi — DPMPTSP Purwakarta",
+    enemyName: "SILAPAK PRESTASI",
+    description: "A public-service web application shipped for DPMPTSP Purwakarta.",
     checkText:
-      "* PROJECT ONE — Sebuah aplikasi web full-stack. Dibangun saat masih belajar, jadi kodenya berantakan tapi jujur. Purwakarta | Pratama Solusi Teknologi",
-    tags: ["Codeigniter 3", "PHP", "MySQL"],
-    year: "4 Months",
+      "* SILAPAK PRESTASI — Full-stack government service web app built with Pratama Solusi Teknologi in Purwakarta. Delivered end-to-end features used in daily operations.",
+    tags: ["CodeIgniter 3", "PHP", "MySQL"],
+    year: "2024",
     url: "https://silapakprestasi-dpmptsp.purwakartakab.go.id/",
     color: "#ff4b4b",
   },
   {
     id: "project-2",
-    name: "Project Two",
-    enemyName: "THE SECOND BOSS",
-    description: "Sebuah platform dengan fokus pada performa & Landing Page yang cepat.",
+    name: "RSU Asri Purwakarta",
+    enemyName: "RSU ASRI WEB",
+    description: "A fast, accessible hospital web platform focused on clear patient information.",
     checkText:
-      "* PROJECT TWO — Platform yang mengutamakan kecepatan. Load time di bawah satu detik, atau setidaknya itulah targetnya, Jujur di sini tidak hanya IT Programmer saya sebagai IT Support Juga",
+      "* RSU ASRI WEB — Performance-focused hospital website and landing page for RSU Asri Purwakarta, developed alongside hands-on IT support and infrastructure work.",
     tags: ["PHP", "WordPress"],
     year: "2025",
     url: "https://rsuasripurwakarta.com/",
     color: "#4b8bff",
   },
   {
-    id: "project-4",
-    name: "Project Three",
-    enemyName: "THE TRUE FINAL BOSS",
-    description: "Project terbesar & paling menantang yang pernah dikerjakan.",
+    id: "project-3",
+    name: "SCM Hub",
+    enemyName: "SCM HUB",
+    description: "The largest and most challenging enterprise platform I have worked on.",
     checkText:
-      "* PROJECT THREE — Project paling besar. Banyak hal dipelajari, banyak bug dikalahkan, banyak kopi dihabiskan sampe sekarang :(",
-    tags: ["Full-stack", "Teamwork", "Laravel", "PostgreSQL", "VueJS", "PHP"],
-    year: "Now",
+      "* SCM HUB — Large-scale collaborative full-stack platform. Countless features shipped, tough bugs defeated, and plenty of coffee fueled the journey.",
+    tags: ["Full-stack", "Laravel", "Vue.js", "PostgreSQL", "PHP"],
+    year: "2025 – Present",
     url: "https://hub.scm.co.id/",
     color: "#b04bff",
   },
@@ -120,45 +123,45 @@ export type JourneyEntry = {
 export const JOURNEY: JourneyEntry[] = [
   {
     id: "j1",
-    year: "2018-2023",
+    year: "2018 – 2023",
     title: "Education",
-    place: "College/ University",
-    text: "* Bandung - University Pasundan | S1 Informatika",
+    place: "Pasundan University, Bandung",
+    text: "* B.Sc. in Informatics Engineering (S1 Informatika) — where the journey began.",
   },
   {
     id: "j2",
-    year: "3 Month",
-    title: "First Job",
-    place: "Freelance Full Stack Developer",
-    text: "* Purwakarta | Pratama Solusi Teknologi",
+    year: "3 Months",
+    title: "First Quest",
+    place: "Freelance Full-Stack Developer",
+    text: "* Pratama Solusi Teknologi, Purwakarta — built and shipped production web features.",
   },
   {
     id: "j3",
     year: "2 Months",
     title: "Leveling Up",
-    place: "Freelance Web Development",
-    text: "* Pangandaran - IT Elementary School An-Nahar",
+    place: "Freelance Web Developer",
+    text: "* Elementary School An-Nahar, Pangandaran — developed web solutions for school operations.",
   },
   {
     id: "j4",
     year: "4 Months",
     title: "Grinding",
-    place: "IT Programmer",
-    text: "* RSU Asri - Purwakarta | Full Stack Developer",
+    place: "IT Programmer & Support",
+    text: "* RSU Asri, Purwakarta — full-stack web development combined with hospital IT operations.",
   },
   {
     id: "j5",
-    year: "2025 - Now",
+    year: "2025 – Present",
     title: "Current Quest",
     place: "IT Web & Mobile Developer",
-    text: "* PT Indosiar Visual Mandiri",
+    text: "* PT Indosiar Visual Mandiri — building scalable web and mobile applications.",
   },
 ];
 
 // Section MERCY — kontak
 export const CONTACT = {
   mercyText:
-    "* Kamu bisa menghubunginya. Dia tidak akan menolak percakapan yang ramah.",
+    "Feel free to reach out. He never turns down a friendly conversation or a cool collaboration.",
   spareLine: "* You feel like reaching out.",
   email: "yusyfi.fuada@gmail.com",
   socials: [
