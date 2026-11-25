@@ -88,6 +88,16 @@ export default function ContactSection() {
             </span>
             SPARE — SAY HELLO
           </span>
+          <a
+            href={PLAYER.cvUrl}
+            download={PLAYER.cvFileName}
+            className="ut-action ut-action--cv"
+            onMouseEnter={() => play("blip")}
+            onFocus={() => play("blip")}
+            onClick={() => play("mercy")}
+          >
+            ▼ DOWNLOAD CV
+          </a>
         </div>
       </BattleBox>
 

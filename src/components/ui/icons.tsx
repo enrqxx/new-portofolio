@@ -320,6 +320,33 @@ export function PythonIcon({ className }: IconProps) {
   );
 }
 
+export function ShieldIcon({ className }: IconProps) {
+  // perisai pixel monokrom (pengganti emoji 🛡 agar cocok dengan gaya ⚔)
+  return (
+    <PixelSprite
+      className={className}
+      pixels={[
+        "................",
+        "....########....",
+        "..##........##..",
+        "..#....##....#..",
+        "..#....##....#..",
+        "..#..######..#..",
+        "..#....##....#..",
+        "..#....##....#..",
+        "..#..........#..",
+        "...#........#...",
+        "....#......#....",
+        ".....#....#.....",
+        "......#..#......",
+        ".......##.......",
+        "................",
+        "................",
+      ]}
+    />
+  );
+}
+
 export const SKILL_ICONS = {
   code: CodeIcon,
   atom: AtomIcon,

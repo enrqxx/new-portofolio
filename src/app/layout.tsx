@@ -22,8 +22,27 @@ const terminal = VT323({
 export const metadata: Metadata = {
   title: "Yusyfi — Portfolio | Filled with DETERMINATION",
   description:
-    "A Undertale-themed portfolio. CHECK the about, inspect the STATS, encounter PROJECTS, walk the JOURNEY, and show some MERCY.",
-  keywords: ["portfolio", "undertale", "web developer", "next.js"],
+    "An Undertale-themed portfolio by Yusyfi, Web & Mobile Developer. CHECK the about, inspect the STATS, encounter PROJECTS, walk the JOURNEY, and show some MERCY.",
+  keywords: ["portfolio", "undertale", "web developer", "mobile developer", "next.js"],
+  openGraph: {
+    title: "Yusyfi — Portfolio | Filled with DETERMINATION",
+    description:
+      "An Undertale-themed interactive developer portfolio featuring procedural Web Audio SFX and a playable secret boss.",
+    type: "website",
+    images: [
+      {
+        url: "/img/avatar.jpeg",
+        alt: "Yusyfi — Web & Mobile Developer",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "Yusyfi — Portfolio | Filled with DETERMINATION",
+    description:
+      "An Undertale-themed interactive developer portfolio featuring procedural Web Audio SFX and a playable secret boss.",
+    images: ["/img/avatar.jpeg"],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
