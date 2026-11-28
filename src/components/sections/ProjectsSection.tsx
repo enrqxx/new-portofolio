@@ -8,17 +8,27 @@
  * Mengikuti pola UI: "* <ENEMY NAME> draws near!"
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import BattleBox from "@/components/ui/BattleBox";
 import SoulHeart from "@/components/ui/SoulHeart";
 import TypewriterText from "@/components/ui/TypewriterText";
 import { useSound } from "@/components/providers/SoundProvider";
 import { PROJECTS, type Project } from "@/lib/data";
 
+const SPARE_FX_MS = 950;
+
 export default function ProjectsSection() {
   const { play } = useSound();
   const [activeIndex, setActiveIndex] = useState(0);
   const [mode, setMode] = useState<"encounter" | "check">("encounter");
+  const [sparedId, setSparedId] = useState<string | null>(null);
+  const spareTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (spareTimer.current) clearTimeout(spareTimer.current);
+    };
+  }, []);
 
   const active = PROJECTS[activeIndex];
 
@@ -45,6 +55,9 @@ export default function ProjectsSection() {
     (project: Project) => {
       if (!project.url) return;
       play("mercy");
+      setSparedId(project.id);
+      if (spareTimer.current) clearTimeout(spareTimer.current);
+      spareTimer.current = setTimeout(() => setSparedId(null), SPARE_FX_MS);
       window.open(project.url, "_blank", "noopener,noreferrer");
     },
     [play]
@@ -101,28 +114,44 @@ export default function ProjectsSection() {
         {/* Area "arena" tempat enemy muncul */}
         <div className="ut-arena">
           <div className="ut-arena__enemy-row">
-            {PROJECTS.map((project, index) => (
-              <button
-                key={project.id}
-                type="button"
-                className={`ut-enemy-pick ${index === activeIndex ? "ut-enemy-pick--active" : ""}`}
-                onMouseEnter={() => moveTo(index)}
-                onFocus={() => moveTo(index)}
-                onClick={() => (mode === "check" && index === activeIndex ? openLink(project) : check())}
-                aria-pressed={index === activeIndex}
-              >
-                <span className="ut-enemy-pick__soul">
-                  {index === activeIndex && <SoulHeart size={12} animated={false} />}
-                </span>
-                <span
-                  className="ut-enemy-pick__sprite"
-                  style={{ color: project.color }}
+            {PROJECTS.map((project, index) => {
+              const isActive = index === activeIndex;
+              const isSpared = sparedId === project.id;
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  className={`ut-enemy-pick ${isActive ? "ut-enemy-pick--active" : ""} ${isSpared ? "ut-enemy-pick--spared" : ""}`}
+                  onMouseEnter={() => moveTo(index)}
+                  onFocus={() => moveTo(index)}
+                  onClick={() => (mode === "check" && isActive ? openLink(project) : check())}
+                  aria-pressed={isActive}
                 >
-                  <EnemySprite color={project.color} />
-                </span>
-                <span className="ut-enemy-pick__name">{project.enemyName}</span>
-              </button>
-            ))}
+                  {isSpared && (
+                    <span className="ut-spare-fx" aria-hidden="true">
+                      <span className="ut-spare-fx__label">★ SPARED!</span>
+                      <span className="ut-spare-fx__spark ut-spare-fx__spark--1" />
+                      <span className="ut-spare-fx__spark ut-spare-fx__spark--2" />
+                      <span className="ut-spare-fx__spark ut-spare-fx__spark--3" />
+                      <span className="ut-spare-fx__spark ut-spare-fx__spark--4" />
+                    </span>
+                  )}
+                  <span className="ut-enemy-pick__soul">
+                    {isActive && <SoulHeart size={12} animated={false} />}
+                  </span>
+                  <span
+                    className="ut-enemy-pick__sprite"
+                    style={{
+                      color: project.color,
+                      animationDelay: `${index * 0.28}s`,
+                    }}
+                  >
+                    <EnemySprite color={project.color} />
+                  </span>
+                  <span className="ut-enemy-pick__name">{project.enemyName}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 

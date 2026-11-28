@@ -33,12 +33,17 @@ const BOX_DEFAULT: Rect = { x: 40, y: 160, w: 560, h: 150 };
 const BOX_BOTTOM = 310;
 
 const SOUL_R = 5; // hitbox kecil seperti di game
+const GRAZE_R = 17; // radius graze ala Deltarune (menyerempet peluru)
+const GRAZE_FRAMES = 14; // lama cincin putih graze menyala
 const SOUL_SPEED = 2.6;
 const BREATH_BONUS = 0.7; // ACT "Hold Breath"
 const I_FRAMES = 40; // HARD: invincibility lebih singkat
 
 const PLAYER_MAX_HP = 100;
 const BOSS_MAX_HP = 100;
+const MAX_TP = 100;
+const GRAZE_TP = 4; // TP didapat tiap menyerempet peluru
+const FIGHT_TP = 8; // TP didapat saat menyerang biasa
 const NOVA_THRESHOLD = 75; // HP% Knight saat Crystal Nova terpicu
 const MAX_HIT = 11; // damage FIGHT maksimum (tengah target)
 
@@ -102,17 +107,89 @@ type Hazard = Bullet | Blade | Slash | SwordRow;
 
 type Callbacks = {
   onHp: (hp: number) => void;
+  onTp: (tp: number) => void;
   onTurnEnd: () => void;
   onFightDone: () => void;
   onDeath: () => void;
 };
 
 /* ====================================================================
-   SPRITE KNIGHT — GIF animasi (taruh di folder public/)
-   Hitam pekat di-blend dengan mode "screen" sehingga latarnya transparan.
+   SPRITE KNIGHT — frame PNG transparan HD 1:1 di public/knight/
+   (dipotong langsung dari sprite sheet 2448x4210, 144x144 per frame).
+   Digambar 1:1 di canvas (tanpa pembesaran blur) + afterimage.
    ==================================================================== */
 
-const BOSS_IMG = "/img/Knight_battle_afterimage.gif";
+const BOSS_DRAW_SIZE = 144; // 1:1 piksel asli HD dari sprite sheet
+const POSE_FRAMES: Record<Exclude<Pose, "vanish">, { files: string[]; speed: number }> = {
+  idle: {
+    files: [
+      "/knight/hd-idle-0.png",
+      "/knight/hd-idle-1.png",
+      "/knight/hd-idle-2.png",
+      "/knight/hd-idle-3.png",
+    ],
+    speed: 9,
+  },
+  point: {
+    files: [
+      "/knight/hd-point-0.png",
+      "/knight/hd-point-1.png",
+      "/knight/hd-point-2.png",
+      "/knight/hd-point-3.png",
+    ],
+    speed: 7,
+  },
+  raise: {
+    files: [
+      "/knight/hd-raise-0.png",
+      "/knight/hd-raise-1.png",
+      "/knight/hd-raise-2.png",
+      "/knight/hd-raise-3.png",
+      "/knight/hd-raise-4.png",
+    ],
+    speed: 6,
+  },
+  glow: {
+    files: ["/knight/hd-glow-0.png", "/knight/hd-glow-1.png", "/knight/hd-glow-2.png"],
+    speed: 6,
+  },
+  center: {
+    files: ["/knight/hd-center-0.png"],
+    speed: 8,
+  },
+};
+
+const VFX_FILES = {
+  star: ["/knight/vfx/star-0.png", "/knight/vfx/star-1.png", "/knight/vfx/star-2.png"],
+  sword: ["/knight/vfx/sword.png"],
+  bulletFlow: ["/knight/vfx/bullet-flow.png"],
+  lineGrate: ["/knight/vfx/line-grate.png"],
+  quickSlash: [
+    "/knight/vfx/quickslash-0.png",
+    "/knight/vfx/quickslash-1.png",
+    "/knight/vfx/quickslash-2.png",
+    "/knight/vfx/quickslash-3.png",
+  ],
+  splitFlame: [
+    "/knight/vfx/splitflame-0.png",
+    "/knight/vfx/splitflame-1.png",
+    "/knight/vfx/splitflame-2.png",
+    "/knight/vfx/splitflame-3.png",
+  ],
+  redSlash: [
+    "/knight/vfx/redslash-0.png",
+    "/knight/vfx/redslash-1.png",
+    "/knight/vfx/redslash-2.png",
+    "/knight/vfx/redslash-3.png",
+  ],
+  shockwave: [
+    "/knight/vfx/shockwave-0.png",
+    "/knight/vfx/shockwave-1.png",
+    "/knight/vfx/shockwave-2.png",
+    "/knight/vfx/shockwave-3.png",
+  ],
+} as const;
+type VfxKey = keyof typeof VFX_FILES;
 
 // Bentuk hati (sama dengan SoulHeart) untuk digambar di canvas
 const SOUL_RECTS: [number, number, number, number][] = [
@@ -157,8 +234,13 @@ class Engine {
   soulOn = false;
   speedBonus = false;
   hp = PLAYER_MAX_HP;
+  tp = 0;
   inv = 0;
   dead = false;
+  private graze = 0;
+  private grazeCd = 0;
+  private grazed = new WeakSet<Hazard>();
+  private touchDelta = { x: 0, y: 0 };
 
   // boss
   bossHp = BOSS_MAX_HP;
@@ -187,9 +269,26 @@ class Engine {
   private gone = false; // Knight sudah hancur → sprite DOM tetap tersembunyi
   private dmgNum: { t: number; text: string } = { t: -1, text: "" };
 
+  private poseImgs: Record<Exclude<Pose, "vanish">, HTMLImageElement[]> = {
+    idle: [],
+    point: [],
+    raise: [],
+    glow: [],
+    center: [],
+  };
+  private vfxImgs: Record<VfxKey, HTMLImageElement[]> = {
+    star: [],
+    sword: [],
+    bulletFlow: [],
+    lineGrate: [],
+    quickSlash: [],
+    splitFlame: [],
+    redSlash: [],
+    shockwave: [],
+  };
+
   constructor(
     canvas: HTMLCanvasElement,
-    private bossEl: HTMLImageElement | null,
     private play: PlayFn,
     cb: Callbacks
   ) {
@@ -204,6 +303,29 @@ class Engine {
     this.cb = cb;
     this.font = getComputedStyle(canvas).fontFamily || "monospace";
     this.reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Preload semua frame PNG transparan dari public/knight/
+    (Object.keys(POSE_FRAMES) as Exclude<Pose, "vanish">[]).forEach((key) => {
+      this.poseImgs[key] = POSE_FRAMES[key].files.map((src) => {
+        const im = new Image();
+        im.src = src;
+        return im;
+      });
+    });
+    (Object.keys(VFX_FILES) as VfxKey[]).forEach((key) => {
+      this.vfxImgs[key] = VFX_FILES[key].map((src) => {
+        const im = new Image();
+        im.src = src;
+        return im;
+      });
+    });
+  }
+
+  private vfxImg(key: VfxKey, index = 0): HTMLImageElement | null {
+    const list = this.vfxImgs[key];
+    if (!list || list.length === 0) return null;
+    const im = list[index % list.length];
+    return im && im.complete && im.naturalWidth > 0 ? im : null;
   }
 
   /* ---------- siklus hidup ---------- */
@@ -231,8 +353,14 @@ class Engine {
 
   reset() {
     this.hp = PLAYER_MAX_HP;
+    this.tp = 0;
     this.bossHp = BOSS_MAX_HP;
     this.inv = 0;
+    this.graze = 0;
+    this.grazeCd = 0;
+    this.grazed = new WeakSet<Hazard>();
+    this.touchDelta.x = 0;
+    this.touchDelta.y = 0;
     this.dead = false;
     this.hazards = [];
     this.gen = null;
@@ -255,6 +383,38 @@ class Engine {
   heal(n: number) {
     this.hp = Math.min(PLAYER_MAX_HP, this.hp + n);
     this.cb.onHp(this.hp);
+  }
+
+  addTp(n: number) {
+    const next = Math.min(MAX_TP, this.tp + n);
+    if (next !== this.tp) {
+      this.tp = next;
+      this.cb.onTp(this.tp);
+    }
+  }
+
+  spendTp(cost: number): boolean {
+    if (this.tp < cost) return false;
+    this.tp = Math.max(0, this.tp - cost);
+    this.cb.onTp(this.tp);
+    return true;
+  }
+
+  castBuster(finisher: boolean) {
+    const dmg = finisher ? this.bossHp : 18;
+    this.bar = {
+      x: this.target.x + this.target.w / 2,
+      delay: 0,
+      stopped: true,
+      dmg,
+      finisher,
+      crit: true,
+    };
+    this.flash = 8;
+    this.addShake(7);
+    this.play("slash");
+    this.mode = "resolve";
+    this.rt = 18;
   }
 
   /* ---------- API untuk giliran ---------- */
@@ -290,6 +450,7 @@ class Engine {
     } else {
       const raw = MAX_HIT * (1 - Math.min(1, dist / half));
       b.dmg = Math.max(1, Math.round(raw * (b.crit ? 1.3 : 1)));
+      this.addTp(FIGHT_TP);
     }
     this.play("select");
     this.mode = "resolve";
@@ -314,6 +475,7 @@ class Engine {
     this.split = { axis, gap: 0, goal: gap, half: side as 0 | 1 };
     this.cut = 12;
     this.cutAxis = axis;
+    this.play("boxbreak");
   }
 
   unsplit() {
@@ -401,6 +563,8 @@ class Engine {
   }
 
   private stepEnemy() {
+    if (this.graze > 0) this.graze--;
+    if (this.grazeCd > 0) this.grazeCd--;
     this.moveSoul();
 
     if (this.gen) {
@@ -427,12 +591,20 @@ class Engine {
   private endEnemy() {
     this.hazards = [];
     this.soulOn = false;
+    this.graze = 0;
+    this.grazeCd = 0;
     this.pose = "idle";
     this.pull = 0;
     this.split = null;
     this.mode = "idle";
     this.target = { ...BOX_DEFAULT };
     this.cb.onTurnEnd();
+  }
+
+  addTouchDelta(dx: number, dy: number) {
+    if (this.mode !== "enemy") return;
+    this.touchDelta.x += dx;
+    this.touchDelta.y += dy;
   }
 
   private moveSoul() {
@@ -447,8 +619,10 @@ class Engine {
       dy *= 0.7071;
     }
     const sp = SOUL_SPEED + (this.speedBonus ? BREATH_BONUS : 0);
-    this.soul.x += dx * sp;
-    this.soul.y += dy * sp;
+    this.soul.x += dx * sp + this.touchDelta.x;
+    this.soul.y += dy * sp + this.touchDelta.y;
+    this.touchDelta.x = 0;
+    this.touchDelta.y = 0;
 
     if (this.pull > 0) {
       const c = this.boardCenter();
@@ -476,6 +650,7 @@ class Engine {
         h.y += h.vy;
         h.age++;
         if (h.burst && h.age >= h.burst.at) {
+          this.play("starBurst");
           const { count, speed } = h.burst;
           const off = Math.random() * Math.PI;
           for (let n = 0; n < count; n++) {
@@ -502,7 +677,7 @@ class Engine {
             h.ang = Math.atan2(this.soul.y - h.y, this.soul.x - h.x);
             h.state = "fly";
             h.age = 0;
-            this.play("alert");
+            this.play("swordDrop");
           }
         } else {
           h.x += Math.cos(h.ang) * h.speed;
@@ -525,17 +700,27 @@ class Engine {
         list.splice(i, 1);
         continue;
       }
-      if (this.inv === 0 && this.hits(h)) this.damage(h.dmg);
+      if (this.inv === 0 && this.hits(h, SOUL_R)) {
+        this.damage(h.dmg);
+      } else if (!this.grazed.has(h) && this.hits(h, GRAZE_R)) {
+        this.grazed.add(h);
+        this.graze = GRAZE_FRAMES;
+        this.addTp(GRAZE_TP);
+        if (this.grazeCd === 0) {
+          this.play("graze");
+          this.grazeCd = 6;
+        }
+      }
       if (this.mode !== "enemy") return;
     }
   }
 
-  private hits(h: Hazard): boolean {
+  private hits(h: Hazard, r: number = SOUL_R): boolean {
     const sx = this.soul.x;
     const sy = this.soul.y;
     if (h.k === "b") {
       if (h.ghost) return false;
-      const rr = h.r + SOUL_R;
+      const rr = h.r + r;
       return (h.x - sx) ** 2 + (h.y - sy) ** 2 < rr * rr;
     }
     if (h.k === "blade") {
@@ -545,15 +730,15 @@ class Engine {
       const t = clamp((sx - h.x) * dx + (sy - h.y) * dy, -h.len / 2, h.len / 2);
       const px = h.x + dx * t;
       const py = h.y + dy * t;
-      const rr = 4 + SOUL_R;
+      const rr = 4 + r;
       return (px - sx) ** 2 + (py - sy) ** 2 < rr * rr;
     }
     if (h.k === "slash") {
       if (h.age < h.warn || h.age >= h.warn + h.flash) return false;
       const d = Math.abs((sx - h.px) * Math.sin(h.ang) - (sy - h.py) * Math.cos(h.ang));
-      return d < h.w / 2 + SOUL_R;
+      return d < h.w / 2 + r;
     }
-    return sx + SOUL_R > h.x && sx - SOUL_R < h.x + h.w && sy + SOUL_R > h.y && sy - SOUL_R < h.y + h.h;
+    return sx + r > h.x && sx - r < h.x + h.w && sy + r > h.y && sy - r < h.y + h.h;
   }
 
   private damage(d: number) {
@@ -590,7 +775,7 @@ class Engine {
     this.rt++;
     if (this.rt === 30) {
       if (this.bar.dmg > 0) {
-        this.play("slash");
+        this.play("bossHurt");
         this.bossHp = Math.max(0, this.bossHp - this.bar.dmg);
         this.bossShake = 16;
         this.hpShow = 85;
@@ -616,24 +801,36 @@ class Engine {
 
   /* ---------- Knight hancur jadi debu ---------- */
 
+  private currentBossImg(): HTMLImageElement | null {
+    const p: Exclude<Pose, "vanish"> = this.pose === "vanish" ? "idle" : this.pose;
+    const list = this.poseImgs[p];
+    if (!list || list.length === 0) return null;
+    const idx = Math.floor(this.frame / POSE_FRAMES[p].speed) % list.length;
+    const im = list[idx];
+    return im && im.complete && im.naturalWidth > 0 ? im : null;
+  }
+
+  private bossRect(): { rx: number; ry: number; rw: number; rh: number } {
+    const bob = Math.sin(this.frame * 0.05) * 3;
+    const hit = this.bossShake > 0 ? (this.bossShake % 4 < 2 ? -5 : 5) : 0;
+    const rw = BOSS_DRAW_SIZE;
+    const rh = BOSS_DRAW_SIZE;
+    const rx = Math.round(W / 2 - rw / 2 + hit);
+    const ry = Math.round(10 + bob + this.bossY * 1.4);
+    return { rx, ry, rw, rh };
+  }
+
   private startDust() {
-    const el = this.bossEl;
+    const im = this.currentBossImg();
     const finish = () => {
       this.gone = true;
       this.dust = null;
       this.mode = "idle";
       this.cb.onFightDone();
     };
-    if (!el || !el.naturalWidth || this.reduce) return finish();
+    if (!im || this.reduce) return finish();
 
-    // posisi sprite saat ini, dikonversi ke koordinat canvas
-    const cr = this.ctx.canvas.getBoundingClientRect();
-    const er = el.getBoundingClientRect();
-    const k = W / cr.width;
-    const rx = (er.left - cr.left) * k;
-    const ry = (er.top - cr.top) * k;
-    const rw = Math.max(1, Math.round(er.width * k));
-    const rh = Math.max(1, Math.round(er.height * k));
+    const { rx, ry, rw, rh } = this.bossRect();
 
     let data: Uint8ClampedArray;
     try {
@@ -643,7 +840,7 @@ class Engine {
       const oc = off.getContext("2d", { willReadFrequently: true });
       if (!oc) return finish();
       oc.imageSmoothingEnabled = false;
-      oc.drawImage(el, 0, 0, rw, rh);
+      oc.drawImage(im, 0, 0, rw, rh);
       data = oc.getImageData(0, 0, rw, rh).data;
     } catch {
       return finish();
@@ -671,7 +868,7 @@ class Engine {
     this.gone = true;
     this.dust = { levels, t: 0 };
     this.mode = "dust";
-    this.play("shatter");
+    this.play("bossFade");
   }
 
   private stepDust() {
@@ -736,12 +933,30 @@ class Engine {
 
   private drawBoss() {
     const c = this.ctx;
-    const bob = Math.sin(this.frame * 0.05) * 3;
-    const hit = this.bossShake > 0 ? (this.bossShake % 4 < 2 ? -5 : 5) : 0;
 
-    // aura ungu di belakang Knight saat Nova
+    // aura ungu di belakang Knight saat Nova / Roar + Bullet flow & Line grate VFX
     const glowOn = this.pose === "glow" || this.pose === "center";
-    this.bossY += ((this.pose === "center" ? 40 : 0) - this.bossY) * 0.06;
+    this.bossY += ((this.pose === "center" ? 54 : 0) - this.bossY) * 0.06;
+
+    const flow = this.vfxImg("bulletFlow");
+    if (flow && (this.mode === "enemy" || glowOn)) {
+      c.save();
+      c.globalAlpha = glowOn ? 0.36 : 0.18;
+      const sx = this.reduce ? 0 : (this.frame * 0.6) % W;
+      c.drawImage(flow, sx - W, 0, W, H);
+      c.drawImage(flow, sx, 0, W, H);
+      c.restore();
+    }
+    const grate = this.vfxImg("lineGrate");
+    if (grate && glowOn) {
+      c.save();
+      c.globalAlpha = 0.28;
+      const gx = this.reduce ? 0 : (this.frame * 3.5) % W;
+      c.drawImage(grate, gx - W, 0, W, H);
+      c.drawImage(grate, gx, 0, W, H);
+      c.restore();
+    }
+
     if (glowOn) {
       const ay = this.pose === "center" ? 150 : 80;
       const g = c.createRadialGradient(W / 2, ay, 10, W / 2, ay, 130);
@@ -751,21 +966,36 @@ class Engine {
       c.fillRect(0, 0, W, H);
     }
 
-    // sprite GIF adalah elemen DOM (supaya animasinya jalan); engine hanya
-    // menggeser / menyembunyikannya sesuai pose, getaran, dan bob.
-    const el = this.bossEl;
-    if (el) {
-      const jx = this.shake > 0 && !this.reduce ? (Math.random() - 0.5) * this.shake * 1.6 : 0;
-      const jy = this.shake > 0 && !this.reduce ? (Math.random() - 0.5) * this.shake * 1.6 : 0;
-      el.style.transform = `translate(${hit + jx}px, calc(${bob + jy}px + ${this.bossY}%))`;
-      el.style.opacity = this.pose === "vanish" || this.gone ? "0" : "1";
-      el.style.filter =
-        this.bossHp <= 0 && !this.gone
-          ? "grayscale(1) brightness(1.3)" // sekarat: memucat sebelum jadi debu
-          : glowOn
-            ? "drop-shadow(0 0 8px #b896ff) brightness(1.25)"
-            : "none";
+    const im = this.currentBossImg();
+    if (!im || this.pose === "vanish" || this.gone) return;
+
+    const { rx, ry, rw, rh } = this.bossRect();
+
+    c.save();
+    c.imageSmoothingEnabled = false;
+
+    // Efek afterimage khas Roaring Knight (2 bayangan tipis tertinggal di belakang)
+    if (!this.reduce) {
+      const trailX1 = Math.round(Math.sin(this.frame * 0.06 - 0.5) * 6);
+      const trailY1 = Math.round(Math.cos(this.frame * 0.05 - 0.5) * 3);
+      c.globalAlpha = 0.24;
+      c.drawImage(im, rx - trailX1, ry - trailY1, rw, rh);
+
+      const trailX2 = Math.round(Math.sin(this.frame * 0.06 - 1.1) * 11);
+      const trailY2 = Math.round(Math.cos(this.frame * 0.05 - 1.1) * 5);
+      c.globalAlpha = 0.11;
+      c.drawImage(im, rx - trailX2, ry - trailY2, rw, rh);
     }
+
+    // Sprite utama Knight (PNG transparan murni)
+    c.globalAlpha = 1;
+    if (this.bossHp <= 0 && !this.gone) {
+      c.filter = "grayscale(1) brightness(1.3)";
+    } else if (glowOn) {
+      c.filter = "drop-shadow(0 0 8px #b896ff) brightness(1.25)";
+    }
+    c.drawImage(im, rx, ry, rw, rh);
+    c.restore();
   }
 
   private drawBoard() {
@@ -784,6 +1014,26 @@ class Engine {
       for (const r of this.boardRects()) c.fillRect(r.x + 4, r.y + 4, r.w - 8, r.h - 8);
     }
 
+    // Split Flame di celah arena saat Board Rend membelah kotak
+    if (this.split && this.split.gap > 6) {
+      const sf = this.vfxImg("splitFlame", Math.floor(this.frame / 5));
+      if (sf) {
+        const b = this.board;
+        c.save();
+        c.globalAlpha = 0.85;
+        if (this.split.axis === "v") {
+          const cx = b.x + b.w / 2;
+          c.translate(cx, b.y + b.h / 2);
+          c.rotate(Math.PI / 2);
+          c.drawImage(sf, -b.h / 2, -22, b.h, 44);
+        } else {
+          const cy = b.y + b.h / 2;
+          c.drawImage(sf, b.x, cy - 22, b.w, 44);
+        }
+        c.restore();
+      }
+    }
+
     // garis tebasan saat kotak dibelah
     if (this.cut > 0) {
       const b = this.board;
@@ -800,13 +1050,21 @@ class Engine {
       c.stroke();
     }
 
-    // aura Crystal Nova (digambar di atas kotak layar penuh)
+    // aura Crystal Nova + Sword Break shockwave ring
     if (this.pose === "center") {
       const g = c.createRadialGradient(W / 2, 150, 10, W / 2, 150, 150);
       g.addColorStop(0, "rgba(150,210,255,0.28)");
       g.addColorStop(1, "rgba(150,210,255,0)");
       c.fillStyle = g;
       c.fillRect(0, 0, W, H);
+
+      const sw = this.vfxImg("shockwave", Math.floor(this.frame / 8));
+      if (sw) {
+        c.save();
+        c.globalAlpha = 0.55;
+        c.drawImage(sw, W / 2 - 157, 150 - 113, 314, 227);
+        c.restore();
+      }
     }
 
     // titik hisap ROAR
@@ -862,15 +1120,21 @@ class Engine {
       if (h.ghost) c.globalAlpha = 0.45;
       if (h.style === "star") {
         c.rotate(h.age * 0.12);
-        c.fillStyle = "#cfeeff";
-        c.beginPath();
-        for (let i = 0; i < 8; i++) {
-          const rr = i % 2 === 0 ? h.r * 1.7 : h.r * 0.65;
-          const a = (i / 8) * Math.PI * 2;
-          c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        const st = this.vfxImg("star", Math.floor(h.age / 5));
+        if (st) {
+          const sz = Math.max(18, Math.round(h.r * 3.4));
+          c.drawImage(st, -sz / 2, -sz / 2, sz, sz);
+        } else {
+          c.fillStyle = "#cfeeff";
+          c.beginPath();
+          for (let i = 0; i < 8; i++) {
+            const rr = i % 2 === 0 ? h.r * 1.7 : h.r * 0.65;
+            const a = (i / 8) * Math.PI * 2;
+            c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+          }
+          c.closePath();
+          c.fill();
         }
-        c.closePath();
-        c.fill();
       } else if (h.style === "shard") {
         c.rotate(Math.atan2(h.vy, h.vx));
         c.fillStyle = "#8fd8ff";
@@ -897,16 +1161,24 @@ class Engine {
       c.rotate(h.ang);
       const lockJitter = h.state === "lock" ? (Math.random() - 0.5) * 1.5 : 0;
       c.translate(0, lockJitter);
-      c.fillStyle = h.state === "fly" ? "#ff2b4b" : "#f2f2ff";
-      c.fillRect(-h.len / 2, -2, h.len, 4);
-      c.beginPath();
-      c.moveTo(h.len / 2, -3);
-      c.lineTo(h.len / 2 + 10, 0);
-      c.lineTo(h.len / 2, 3);
-      c.closePath();
-      c.fill();
-      c.fillStyle = "#5c5c7a";
-      c.fillRect(-h.len / 2 - 2, -6, 4, 12);
+      const sw = this.vfxImg("sword");
+      if (sw) {
+        if (h.state === "fly") c.filter = "drop-shadow(0 0 6px #ff2b4b)";
+        const drawW = h.len + 18;
+        const drawH = Math.round(drawW * (32 / 99));
+        c.drawImage(sw, -drawW / 2, -drawH / 2, drawW, drawH);
+      } else {
+        c.fillStyle = h.state === "fly" ? "#ff2b4b" : "#f2f2ff";
+        c.fillRect(-h.len / 2, -2, h.len, 4);
+        c.beginPath();
+        c.moveTo(h.len / 2, -3);
+        c.lineTo(h.len / 2 + 10, 0);
+        c.lineTo(h.len / 2, 3);
+        c.closePath();
+        c.fill();
+        c.fillStyle = "#5c5c7a";
+        c.fillRect(-h.len / 2 - 2, -6, 4, 12);
+      }
       c.restore();
       return;
     }
@@ -929,56 +1201,112 @@ class Engine {
       } else {
         const t = h.age - h.warn;
         const fade = t < h.flash ? 1 : 1 - (t - h.flash) / 6;
-        c.strokeStyle = `rgba(255,255,255,${Math.max(0, fade)})`;
-        c.lineWidth = h.w * (t < h.flash ? 1 : Math.max(0.1, fade));
-        c.beginPath();
-        c.moveTo(h.px - dx, h.py - dy);
-        c.lineTo(h.px + dx, h.py + dy);
-        c.stroke();
+        const qs = this.vfxImg("quickSlash", Math.min(3, Math.floor(t / 2)));
+        if (qs) {
+          c.translate(h.px, h.py);
+          c.rotate(h.ang);
+          c.globalAlpha = Math.max(0, fade);
+          c.drawImage(qs, -340, -Math.max(22, h.w * 1.4), 680, Math.max(44, h.w * 2.8));
+        } else {
+          c.strokeStyle = `rgba(255,255,255,${Math.max(0, fade)})`;
+          c.lineWidth = h.w * (t < h.flash ? 1 : Math.max(0.1, fade));
+          c.beginPath();
+          c.moveTo(h.px - dx, h.py - dy);
+          c.lineTo(h.px + dx, h.py + dy);
+          c.stroke();
+        }
       }
       c.restore();
       return;
     }
 
-    // baris pedang (Sword Tunnel): deretan bilah menghadap ke bawah
+    // baris pedang (Sword Tunnel): deretan sprite pedang menghadap ke bawah
+    const sw = this.vfxImg("sword");
     for (let x = h.x; x < h.x + h.w - 1; x += 14) {
       const bw = Math.min(10, h.x + h.w - x - 2);
       if (bw <= 0) break;
-      c.fillStyle = "#e8e8f4";
-      c.fillRect(x + 2, h.y - 14, bw, h.h);
-      c.beginPath();
-      c.moveTo(x + 2, h.y + h.h - 14);
-      c.lineTo(x + 2 + bw, h.y + h.h - 14);
-      c.lineTo(x + 2 + bw / 2, h.y + h.h + 2);
-      c.closePath();
-      c.fill();
-      c.fillStyle = "#6a6a88";
-      c.fillRect(x, h.y - 16, bw + 4, 4);
+      if (sw) {
+        c.save();
+        c.translate(x + bw / 2 + 2, h.y + h.h / 2 - 4);
+        c.rotate(Math.PI / 2);
+        c.drawImage(sw, -(h.h + 14) / 2, -(bw + 6) / 2, h.h + 14, bw + 6);
+        c.restore();
+      } else {
+        c.fillStyle = "#e8e8f4";
+        c.fillRect(x + 2, h.y - 14, bw, h.h);
+        c.beginPath();
+        c.moveTo(x + 2, h.y + h.h - 14);
+        c.lineTo(x + 2 + bw, h.y + h.h - 14);
+        c.lineTo(x + 2 + bw / 2, h.y + h.h + 2);
+        c.closePath();
+        c.fill();
+        c.fillStyle = "#6a6a88";
+        c.fillRect(x, h.y - 16, bw + 4, 4);
+      }
     }
   }
 
   private drawSoul() {
     if (this.inv > 0 && this.frame % 8 < 4) return;
     const c = this.ctx;
+    const sx = Math.round(this.soul.x);
+    const sy = Math.round(this.soul.y);
+    const ox = sx - 8;
+    const oy = sy - 8;
+
+    // Cincin putih graze khas Deltarune saat menyerempet serangan
+    if (this.graze > 0) {
+      const p = this.graze / GRAZE_FRAMES;
+      c.save();
+      c.globalAlpha = Math.min(1, p * 1.2);
+      c.strokeStyle = "#ffffff";
+      c.lineWidth = p > 0.55 ? 2 : 1.5;
+      c.beginPath();
+      c.arc(sx, sy, 13 + (1 - p) * 3, 0, Math.PI * 2);
+      c.stroke();
+
+      // Kilatan outline putih singkat tepat di sekeliling SOUL
+      if (this.graze > GRAZE_FRAMES - 5) {
+        c.globalAlpha = 0.7;
+        c.fillStyle = "#ffffff";
+        for (const [x, y, w, h] of SOUL_RECTS) {
+          c.fillRect(ox + x - 1, oy + y - 1, w + 2, h + 2);
+        }
+      }
+      c.restore();
+    }
+
     c.fillStyle = "#ff2b4b";
-    const ox = Math.round(this.soul.x - 8);
-    const oy = Math.round(this.soul.y - 8);
     for (const [x, y, w, h] of SOUL_RECTS) c.fillRect(ox + x, oy + y, w, h);
   }
 
   private drawHud() {
     const c = this.ctx;
 
-    // efek tebasan FIGHT di tubuh Knight
-    if (this.mode === "resolve" && this.rt >= 30 && this.rt < 48 && this.bar.dmg > 0) {
-      const p = (this.rt - 30) / 18;
-      c.strokeStyle = "#fff";
-      c.lineWidth = 6;
-      c.lineCap = "round";
-      c.beginPath();
-      c.moveTo(W / 2 - 44, 24);
-      c.lineTo(W / 2 - 44 + 88 * p, 24 + 88 * p);
-      c.stroke();
+    // efek tebasan FIGHT / Rude Buster di tubuh Knight (Red Slash + Shockwave VFX)
+    if (this.mode === "resolve" && this.rt >= 30 && this.rt < 50 && this.bar.dmg > 0) {
+      const p = (this.rt - 30) / 20;
+      const rs = this.vfxImg("redSlash", Math.min(3, Math.floor(p * 4)));
+      if (rs) {
+        c.save();
+        c.drawImage(rs, W / 2 - 48, 18, 96, 136);
+        if (this.bar.crit) {
+          const sw = this.vfxImg("shockwave", Math.min(3, Math.floor(p * 4)));
+          if (sw) {
+            c.globalAlpha = 0.65 * (1 - p * 0.5);
+            c.drawImage(sw, W / 2 - 110, 4, 220, 160);
+          }
+        }
+        c.restore();
+      } else {
+        c.strokeStyle = "#fff";
+        c.lineWidth = 6;
+        c.lineCap = "round";
+        c.beginPath();
+        c.moveTo(W / 2 - 44, 24);
+        c.lineTo(W / 2 - 44 + 88 * p, 24 + 88 * p);
+        c.stroke();
+      }
     }
 
     // bar HP Knight (abu-abu + hijau) muncul sesaat setelah kena
@@ -1171,7 +1499,7 @@ function* sanguineSlash(e: Engine, d: number) {
         32
       );
     }
-    e.sfx("alert");
+    e.sfx("slashWarn");
     yield Math.max(42, 70 - d * 8) + 10;
   }
   yield 35;
@@ -1184,6 +1512,7 @@ function* crystalNova(e: Engine, d: number) {
   e.pose = "center";
   e.soul = { x: W / 2, y: 275 };
   e.sfx("roar");
+  e.sfx("novaCharge");
   e.addFlash(0.7);
   e.addShake(12);
   yield 90;
@@ -1286,9 +1615,23 @@ const ATTACKS: Record<AttackKind, Script> = {
   sanguine: sanguineSlash,
   nova: crystalNova,
 };
-// Putaran pertama vs putaran berikutnya (sesuai wiki):
-const FIRST_ORDER: AttackKind[] = ["barrage", "knife", "rend", "tunnel", "sanguine"];
-const LATER_ORDER: AttackKind[] = ["barrage", "rend", "tunnel", "knife", "sanguine"];
+// Pool serangan acak (shuffle-bag): tiap putaran diacak dan tidak pernah
+// mengulang serangan yang sama dua kali berturut-turut.
+const ATTACK_POOL: AttackKind[] = ["barrage", "knife", "rend", "tunnel", "sanguine"];
+
+function shuffleAttacks(avoidFirst: AttackKind | null): AttackKind[] {
+  const bag = [...ATTACK_POOL];
+  for (let i = bag.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [bag[i], bag[j]] = [bag[j], bag[i]];
+  }
+  // pastikan elemen pertama yang akan di-pop (ujung array) tidak sama dengan serangan sebelumnya
+  if (avoidFirst && bag[bag.length - 1] === avoidFirst) {
+    const swapIdx = Math.floor(Math.random() * (bag.length - 1));
+    [bag[bag.length - 1], bag[swapIdx]] = [bag[swapIdx], bag[bag.length - 1]];
+  }
+  return bag;
+}
 
 /* ====================================================================
    UI (React)
@@ -1297,7 +1640,12 @@ const LATER_ORDER: AttackKind[] = ["barrage", "rend", "tunnel", "knife", "sangui
 type Phase = "intro" | "menu" | "act" | "item" | "bar" | "dialog" | "enemy" | "won" | "lost";
 
 const MENU = ["FIGHT", "ACT", "ITEM", "MERCY"] as const;
-const ACTS = ["Check", "Hold Breath"] as const;
+const ACTS = [
+  { name: "Check", tp: 0 },
+  { name: "Hold Breath", tp: 0 },
+  { name: "Heal Prayer", tp: 32 },
+  { name: "Rude Buster", tp: 50 },
+] as const;
 const FLAVOR = [
   "* The Roaring Knight's blade gleams.",
   "* A cold wind howls through the arena.",
@@ -1314,9 +1662,29 @@ const START_ITEMS: Item[] = [
 const CSS = `
 .rk-wrap { max-width: 640px; margin: 0 auto; container-type: inline-size; font-family: var(--font-terminal), monospace; color: #fff; }
 .rk-stage { position: relative; background: #000; }
-.rk-canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; font-family: var(--font-pixel), monospace; }
+.rk-canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; font-family: var(--font-pixel), monospace; touch-action: none; user-select: none; }
 .rk-boss { position: absolute; left: 35.9375%; top: 1.8%; width: 28.125%; height: auto; image-rendering: pixelated; mix-blend-mode: screen; pointer-events: none; user-select: none; transition: opacity 0.15s linear; }
 .rk-overlay { position: absolute; left: 6.25%; top: 48.5%; width: 87.5%; height: 45.4%; padding: 3.4cqw 3.8cqw; overflow: hidden; font-size: 3.7cqw; line-height: 1.45; }
+.rk-overlay--won { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; padding: 2.6cqw 3.8cqw 3cqw; }
+.rk-overlay--tap { cursor: pointer; }
+.rk-go--sm { font-size: 2.2cqw; padding: 0.9cqw 2.8cqw; border-width: 0.45cqw; }
+.rk-dialog-next { position: absolute; right: 3cqw; bottom: 2cqw; font-family: var(--font-pixel), monospace; font-size: 2.2cqw; color: #ff0; animation: ut-blink 0.8s steps(1) infinite; }
+.rk-back-item { color: #8b8b8b; }
+.rk-touch { display: none; align-items: center; justify-content: space-between; gap: 1rem; max-width: 640px; margin: 0.85rem auto 0; padding: 0 0.25rem; user-select: none; -webkit-user-select: none; }
+.rk-dpad { display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 4px; }
+.rk-pad-btn { display: flex; align-items: center; justify-content: center; background: #000; border: 2px solid #fff; color: #fff; font-family: var(--font-pixel), monospace; font-size: 0.75rem; touch-action: none; cursor: pointer; }
+.rk-pad-btn:active { background: #fff; color: #000; }
+.rk-pad-up { grid-column: 2; grid-row: 1; }
+.rk-pad-left { grid-column: 1; grid-row: 2; }
+.rk-pad-right { grid-column: 3; grid-row: 2; }
+.rk-pad-down { grid-column: 2; grid-row: 3; }
+.rk-ab { display: flex; align-items: center; gap: 0.75rem; }
+.rk-ab-btn { width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; background: #000; border: 3px solid #ff7f27; color: #ff7f27; font-family: var(--font-pixel), monospace; font-size: 0.85rem; touch-action: none; cursor: pointer; }
+.rk-ab-btn--z { border-color: #ff2b4b; color: #ff2b4b; }
+.rk-ab-btn:active { background: #ff0; border-color: #ff0; color: #000; }
+@media (hover: none) and (pointer: coarse) {
+  .rk-touch { display: flex; }
+}
 .rk-text { margin: 0; white-space: pre-wrap; color: #fff; }
 .rk-list { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4cqw 3cqw; align-content: start; }
 .rk-item { display: flex; align-items: center; gap: 1.6cqw; background: none; border: 0; color: #fff; font: inherit; text-align: left; cursor: pointer; padding: 0; }
@@ -1326,12 +1694,20 @@ const CSS = `
 .rk-intro p { margin: 0; font-size: 3.8cqw; }
 .rk-go { background: #000; color: #ff7f27; border: 0.6cqw solid #ff7f27; font-family: var(--font-pixel), monospace; font-size: 3.4cqw; padding: 1.4cqw 5cqw; cursor: pointer; }
 .rk-go:hover, .rk-go:focus-visible { color: #ff0; border-color: #ff0; outline: none; }
-.rk-hud { display: flex; align-items: center; gap: 3cqw; padding: 1.6cqw 2cqw 0.6cqw; font-size: 3.5cqw; white-space: nowrap; }
-.rk-hud__name { overflow: hidden; text-overflow: ellipsis; max-width: 22cqw; }
-.rk-hud__lbl { font-family: var(--font-pixel), monospace; font-size: 2.4cqw; }
-.rk-hp { display: flex; align-items: center; gap: 1.6cqw; }
-.rk-hp__bar { width: 20cqw; height: 3.6cqw; background: #c00; }
+.rk-hud { display: flex; align-items: center; justify-content: space-between; gap: 2.2cqw; padding: 1.6cqw 2cqw 0.6cqw; font-size: 3.3cqw; white-space: nowrap; }
+.rk-hud__name { overflow: hidden; text-overflow: ellipsis; max-width: 20cqw; }
+.rk-hud__lbl { font-family: var(--font-pixel), monospace; font-size: 2.2cqw; }
+.rk-hp { display: flex; align-items: center; gap: 1.4cqw; }
+.rk-hp__bar { width: 17cqw; height: 3.4cqw; background: #c00; }
 .rk-hp__fill { height: 100%; background: #ff0; }
+.rk-tp { display: flex; align-items: center; gap: 1.2cqw; color: #ff7f27; }
+.rk-tp__bar { width: 13cqw; height: 3.4cqw; background: #2b1408; border: 0.3cqw solid #ff7f27; }
+.rk-tp__fill { height: 100%; background: #ff7f27; transition: width 0.12s linear, background 0.15s; }
+.rk-tp--ready { color: #ffe600; }
+.rk-tp--ready .rk-tp__bar { border-color: #ffe600; }
+.rk-tp--ready .rk-tp__fill { background: #ffe600; }
+.rk-tp-cost { margin-left: auto; font-family: var(--font-pixel), monospace; font-size: 2cqw; color: #ff7f27; }
+.rk-item[disabled] .rk-tp-cost { color: #666; }
 .rk-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2cqw; padding: 1cqw 0.5cqw 0; }
 .rk-btn { display: flex; align-items: center; justify-content: center; gap: 1.2cqw; background: #000; border: 0.6cqw solid #ff7f27; color: #ff7f27; font-family: var(--font-pixel), monospace; font-size: 3cqw; padding: 1.5cqw 0; cursor: pointer; }
 .rk-btn--on { border-color: #ff0; color: #ff0; }
@@ -1344,7 +1720,6 @@ export default function RoarKnightGame() {
   const playRef = useRef(play);
   const bgmRef = useRef(setBgmPaused);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const bossRef = useRef<HTMLImageElement>(null);
   const engineRef = useRef<Engine | null>(null);
 
   // Update ref di effect, bukan saat render (aturan react-hooks)
@@ -1363,10 +1738,25 @@ export default function RoarKnightGame() {
   const [subIdx, setSubIdx] = useState(0);
   const [text, setText] = useState("");
   const [hp, setHp] = useState(PLAYER_MAX_HP);
+  const [tp, setTp] = useState(0);
   const [items, setItems] = useState<Item[]>(START_ITEMS);
 
   // meta battle (tidak perlu me-render ulang)
-  const meta = useRef({ turn: 0, novaDone: false, justNova: false, guardDown: false });
+  const meta = useRef<{
+    turn: number;
+    novaDone: boolean;
+    justNova: boolean;
+    guardDown: boolean;
+    bag: AttackKind[];
+    lastAttack: AttackKind | null;
+  }>({
+    turn: 0,
+    novaDone: false,
+    justNova: false,
+    guardDown: false,
+    bag: [],
+    lastAttack: null,
+  });
   const typed = useRef(false);
 
   // cermin state terbaru untuk handler keyboard & callback engine
@@ -1386,14 +1776,15 @@ export default function RoarKnightGame() {
     const m = meta.current;
     let kind: AttackKind;
     // HARD: kesulitan awal 1.2, naik 0.25 tiap putaran 5 serangan
-    const diff = 1.2 + Math.floor(m.turn / FIRST_ORDER.length) * 0.25;
+    const diff = 1.2 + Math.floor(m.turn / ATTACK_POOL.length) * 0.25;
     if (!m.novaDone && eng.bossHp <= NOVA_THRESHOLD) {
       kind = "nova";
       m.novaDone = true;
       m.justNova = true;
     } else {
-      const order = m.turn < FIRST_ORDER.length ? FIRST_ORDER : LATER_ORDER;
-      kind = order[m.turn % order.length];
+      if (m.bag.length === 0) m.bag = shuffleAttacks(m.lastAttack);
+      kind = m.bag.pop()!;
+      m.lastAttack = kind;
       m.turn++;
     }
     setPhase("enemy");
@@ -1416,8 +1807,16 @@ export default function RoarKnightGame() {
     const eng = engineRef.current;
     if (!eng) return;
     eng.reset();
-    meta.current = { turn: 0, novaDone: false, justNova: false, guardDown: false };
+    meta.current = {
+      turn: 0,
+      novaDone: false,
+      justNova: false,
+      guardDown: false,
+      bag: shuffleAttacks(null),
+      lastAttack: null,
+    };
     setHp(PLAYER_MAX_HP);
+    setTp(0);
     setItems(START_ITEMS.map((i) => ({ ...i })));
     setMenuIdx(0);
     setSubIdx(0);
@@ -1454,17 +1853,39 @@ export default function RoarKnightGame() {
 
   const doAct = (i: number) => {
     const eng = engineRef.current;
-    if (!eng) return;
-    playRef.current("select");
+    const act = ACTS[i];
+    if (!eng || !act) return;
+    if (act.tp > 0 && eng.tp < act.tp) {
+      playRef.current("back");
+      return;
+    }
+
     if (i === 0) {
+      playRef.current("select");
       dialog(
-        "* ROARING KNIGHT - ATK ?? DEF ??\n* Its blade never rests. Wear it down before it lets its guard fall."
+        "* ROARING KNIGHT - ATK ?? DEF ??\n* Graze its attacks to build TP for Heal Prayer or Rude Buster!"
       );
-    } else if (eng.speedBonus) {
-      dialog("* You're already holding your breath.");
-    } else {
-      eng.speedBonus = true;
-      dialog("* You held your breath.\n* Your SOUL feels lighter. SPEED up!");
+    } else if (i === 1) {
+      playRef.current("select");
+      if (eng.speedBonus) {
+        dialog("* You're already holding your breath.");
+      } else {
+        eng.speedBonus = true;
+        dialog("* You held your breath.\n* Your SOUL feels lighter. SPEED up!");
+      }
+    } else if (i === 2) {
+      eng.spendTp(act.tp);
+      playRef.current("heal");
+      const before = eng.hp;
+      eng.heal(40);
+      const gained = eng.hp - before;
+      dialog(
+        `* You cast HEAL PRAYER!\n* ${eng.hp >= PLAYER_MAX_HP ? "HP maxed out!" : `Recovered ${gained} HP.`}`
+      );
+    } else if (i === 3) {
+      eng.spendTp(act.tp);
+      setPhase("bar");
+      eng.castBuster(meta.current.guardDown);
     }
   };
 
@@ -1496,13 +1917,14 @@ export default function RoarKnightGame() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const engine = new Engine(canvas, bossRef.current, (n) => playRef.current(n), {
+    const engine = new Engine(canvas, (n) => playRef.current(n), {
       onHp: (v) => setHp(v),
+      onTp: (v) => setTp(v),
       onTurnEnd: () => fns.current.backToMenu(),
       onFightDone: () => {
         const eng = engineRef.current;
         if (eng && eng.bossHp <= 0) {
-          playRef.current("mercy");
+          playRef.current("bossWin");
           setPhase("won");
           typed.current = false;
           setText("* YOU WON!\n* The Roaring Knight fades into the dark.");
@@ -1667,6 +2089,87 @@ export default function RoarKnightGame() {
     };
   }, []);
 
+  /* ---------- kontrol sentuh (mobile / tablet) ---------- */
+  const dragRef = useRef<{ id: number; x: number; y: number } | null>(null);
+
+  const handleCanvasPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const eng = engineRef.current;
+    if (!eng) return;
+
+    if (ui.current.phase === "bar") {
+      e.preventDefault();
+      eng.pressConfirm();
+      return;
+    }
+
+    if (ui.current.phase === "enemy") {
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    }
+  };
+
+  const handleCanvasPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    const eng = engineRef.current;
+    if (!drag || drag.id !== e.pointerId || !eng) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const dx = ((e.clientX - drag.x) * W) / rect.width;
+    const dy = ((e.clientY - drag.y) * H) / rect.height;
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    eng.addTouchDelta(dx, dy);
+  };
+
+  const handleCanvasPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (dragRef.current?.id === e.pointerId) {
+      dragRef.current = null;
+    }
+  };
+
+  const handleDialogTap = () => {
+    if (ui.current.phase !== "dialog") return;
+    if (typed.current) fns.current.advanceDialog();
+    else window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+  };
+
+  const cancelSubmenu = () => {
+    if (ui.current.phase !== "act" && ui.current.phase !== "item") return;
+    setPhase("menu");
+    typed.current = false;
+    setText(FLAVOR[Math.floor(Math.random() * FLAVOR.length)]);
+    playRef.current("back");
+  };
+
+  const pressVirtualZ = () => {
+    const { phase: ph, menuIdx: mi, subIdx: si } = ui.current;
+    const eng = engineRef.current;
+    if (!eng) return;
+    if (ph === "intro" || ph === "won") fns.current.startBattle();
+    else if (ph === "bar") eng.pressConfirm();
+    else if (ph === "menu") fns.current.confirmMenu(mi);
+    else if (ph === "act") fns.current.doAct(si);
+    else if (ph === "item") fns.current.doItem(si);
+    else if (ph === "dialog") handleDialogTap();
+  };
+
+  const handlePadDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const key = e.currentTarget.dataset.key;
+    if (!key) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    engineRef.current?.keys.add(key);
+  };
+
+  const handlePadUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const key = e.currentTarget.dataset.key;
+    if (!key) return;
+    engineRef.current?.keys.delete(key);
+  };
+
   /* ---------- game over (reuse komponen GameOver) ---------- */
   const handleGameOverPhase = (p: GameOverPhase) => {
     if (p === "crack") playRef.current("crack");
@@ -1710,41 +2213,54 @@ export default function RoarKnightGame() {
             className="rk-canvas"
             aria-label="Battle arena: The Roaring Knight"
             role="img"
-          />
-
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            ref={bossRef}
-            src={BOSS_IMG}
-            alt="The Roaring Knight"
-            className="rk-boss"
-            draggable={false}
+            onPointerDown={handleCanvasPointerDown}
+            onPointerMove={handleCanvasPointerMove}
+            onPointerUp={handleCanvasPointerUp}
+            onPointerCancel={handleCanvasPointerUp}
           />
 
           {showOverlay && (
-            <div className="rk-overlay">
+            <div
+              className={`rk-overlay ${phase === "dialog" ? "rk-overlay--tap" : ""} ${phase === "won" ? "rk-overlay--won" : ""}`}
+              onClick={phase === "dialog" ? handleDialogTap : undefined}
+            >
               {(phase === "menu" || phase === "dialog" || phase === "won") && typedText}
 
+              {phase === "dialog" && (
+                <span className="rk-dialog-next" aria-hidden="true">
+                  ▼
+                </span>
+              )}
+
               {phase === "won" && (
-                <button type="button" className="rk-go" style={{ marginTop: "2cqw" }} onClick={() => fns.current.startBattle()}>
+                <button type="button" className="rk-go rk-go--sm" onClick={() => fns.current.startBattle()}>
                   PLAY AGAIN
                 </button>
               )}
 
               {phase === "act" && (
                 <div className="rk-list">
-                  {ACTS.map((a, i) => (
-                    <button
-                      key={a}
-                      type="button"
-                      className="rk-item"
-                      onMouseEnter={() => i !== subIdx && (setSubIdx(i), playRef.current("move"))}
-                      onClick={() => fns.current.doAct(i)}
-                    >
-                      <span className="rk-soulslot">{subIdx === i && <SoulHeart size={14} animated={false} />}</span>
-                      * {a}
-                    </button>
-                  ))}
+                  {ACTS.map((a, i) => {
+                    const locked = a.tp > 0 && tp < a.tp;
+                    return (
+                      <button
+                        key={a.name}
+                        type="button"
+                        className="rk-item"
+                        disabled={locked}
+                        onMouseEnter={() => i !== subIdx && (setSubIdx(i), playRef.current("move"))}
+                        onClick={() => fns.current.doAct(i)}
+                      >
+                        <span className="rk-soulslot">{subIdx === i && <SoulHeart size={14} animated={false} />}</span>
+                        <span>* {a.name}</span>
+                        {a.tp > 0 && <span className="rk-tp-cost">{a.tp}%</span>}
+                      </button>
+                    );
+                  })}
+                  <button type="button" className="rk-item rk-back-item" onClick={cancelSubmenu}>
+                    <span className="rk-soulslot" />
+                    ◀ Back
+                  </button>
                 </div>
               )}
 
@@ -1763,6 +2279,10 @@ export default function RoarKnightGame() {
                       * {it.name} x{it.left}
                     </button>
                   ))}
+                  <button type="button" className="rk-item rk-back-item" onClick={cancelSubmenu}>
+                    <span className="rk-soulslot" />
+                    ◀ Back
+                  </button>
                 </div>
               )}
             </div>
@@ -1787,8 +2307,15 @@ export default function RoarKnightGame() {
               <span className="rk-hp__fill" style={{ display: "block", width: `${(hp / PLAYER_MAX_HP) * 100}%` }} />
             </span>
             <span>
-              {hp} / {PLAYER_MAX_HP}
+              {hp}/{PLAYER_MAX_HP}
             </span>
+          </span>
+          <span className={`rk-tp ${tp >= 50 ? "rk-tp--ready" : ""}`} title="Tension Points — graze attacks to charge">
+            <span className="rk-hud__lbl">TP</span>
+            <span className="rk-tp__bar">
+              <span className="rk-tp__fill" style={{ display: "block", width: `${tp}%` }} />
+            </span>
+            <span>{tp}%</span>
           </span>
         </div>
 
@@ -1817,8 +2344,83 @@ export default function RoarKnightGame() {
         </div>
       </div>
 
+      {/* Kontrol sentuh khusus layar touch (HP/tablet) */}
+      <div className="rk-touch" aria-label="Touch controls">
+        <div className="rk-dpad">
+          <button
+            type="button"
+            className="rk-pad-btn rk-pad-up"
+            aria-label="Move up"
+            data-key="ArrowUp"
+            onPointerDown={handlePadDown}
+            onPointerUp={handlePadUp}
+            onPointerCancel={handlePadUp}
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            className="rk-pad-btn rk-pad-left"
+            aria-label="Move left"
+            data-key="ArrowLeft"
+            onPointerDown={handlePadDown}
+            onPointerUp={handlePadUp}
+            onPointerCancel={handlePadUp}
+          >
+            ◀
+          </button>
+          <button
+            type="button"
+            className="rk-pad-btn rk-pad-right"
+            aria-label="Move right"
+            data-key="ArrowRight"
+            onPointerDown={handlePadDown}
+            onPointerUp={handlePadUp}
+            onPointerCancel={handlePadUp}
+          >
+            ▶
+          </button>
+          <button
+            type="button"
+            className="rk-pad-btn rk-pad-down"
+            aria-label="Move down"
+            data-key="ArrowDown"
+            onPointerDown={handlePadDown}
+            onPointerUp={handlePadUp}
+            onPointerCancel={handlePadUp}
+          >
+            ▼
+          </button>
+        </div>
+
+        <div className="rk-ab">
+          <button
+            type="button"
+            className="rk-ab-btn"
+            aria-label="Cancel"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              cancelSubmenu();
+            }}
+          >
+            X
+          </button>
+          <button
+            type="button"
+            className="rk-ab-btn rk-ab-btn--z"
+            aria-label="Confirm or Attack"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              pressVirtualZ();
+            }}
+          >
+            Z
+          </button>
+        </div>
+      </div>
+
       <p className="ut-roar-hint">
-        [ ← → ↑ ↓ ] MOVE &nbsp;·&nbsp; [ Z / ENTER ] CONFIRM &nbsp;·&nbsp; [ X ] CANCEL — hit Z at the center of the bar!
+        [ ← → ↑ ↓ / DRAG ] MOVE &nbsp;·&nbsp; [ Z / TAP ] CONFIRM &nbsp;·&nbsp; [ X ] CANCEL — hit Z at the center of the bar!
       </p>
 
       {phase === "lost" && <GameOver onPhase={handleGameOverPhase} onDone={handleGameOverDone} />}

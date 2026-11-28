@@ -39,6 +39,16 @@ export default function Home() {
     setEntered(true);
   }, []);
 
+  const handleOpenSave = useCallback(() => {
+    hasEnteredSession = false;
+    try {
+      window.sessionStorage.removeItem(ENTERED_KEY);
+    } catch {
+      // ignore
+    }
+    setEntered(false);
+  }, []);
+
   // SAVE screen memakai fixed overlay, jadi body boleh tetap statis.
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -56,7 +66,11 @@ export default function Home() {
         aria-hidden={!entered}
       >
         <FloatingHud />
-        <Hub />
+        <Hub
+          key={entered ? "entered" : "waiting"}
+          active={entered}
+          onOpenSave={handleOpenSave}
+        />
       </div>
     </div>
   );

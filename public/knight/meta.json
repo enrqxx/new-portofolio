@@ -1,0 +1,49 @@
+{
+  "hd-idle": {
+    "frames": [
+      "/knight/hd-idle-0.png",
+      "/knight/hd-idle-1.png",
+      "/knight/hd-idle-2.png",
+      "/knight/hd-idle-3.png"
+    ],
+    "w": 144,
+    "h": 144
+  },
+  "hd-point": {
+    "frames": [
+      "/knight/hd-point-0.png",
+      "/knight/hd-point-1.png",
+      "/knight/hd-point-2.png",
+      "/knight/hd-point-3.png"
+    ],
+    "w": 144,
+    "h": 144
+  },
+  "hd-raise": {
+    "frames": [
+      "/knight/hd-raise-0.png",
+      "/knight/hd-raise-1.png",
+      "/knight/hd-raise-2.png",
+      "/knight/hd-raise-3.png",
+      "/knight/hd-raise-4.png"
+    ],
+    "w": 144,
+    "h": 144
+  },
+  "hd-glow": {
+    "frames": [
+      "/knight/hd-glow-0.png",
+      "/knight/hd-glow-1.png",
+      "/knight/hd-glow-2.png"
+    ],
+    "w": 144,
+    "h": 144
+  },
+  "hd-center": {
+    "frames": [
+      "/knight/hd-center-0.png"
+    ],
+    "w": 144,
+    "h": 144
+  }
+}

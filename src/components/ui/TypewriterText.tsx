@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSound } from "@/components/providers/SoundProvider";
+import type { SoundName } from "@/lib/sound";
 
 const BLIP_EVERY = 3; // bunyi blip tiap N huruf
 const PUNCTUATION = new Set([".", ",", "!", "?", ";", ":"]);
@@ -26,6 +27,7 @@ export default function TypewriterText({
   startDelay = 0,
   onComplete,
   soundEnabled = true,
+  soundName = "blip",
   as: Tag = "p",
 }: {
   text: string;
@@ -34,9 +36,10 @@ export default function TypewriterText({
   startDelay?: number;
   onComplete?: () => void;
   soundEnabled?: boolean;
+  soundName?: SoundName;
   as?: React.ElementType;
 }) {
-  const { play, muted } = useSound();
+  const { play } = useSound();
   // `tick` naik tiap huruf; `displayed` & `done` diturunkan darinya.
   const [tick, setTick] = useState(0);
   const indexRef = useRef(0);
@@ -85,14 +88,13 @@ export default function TypewriterText({
 
         const char = text[nextIndex - 1];
 
-        // Bunyi blip periodik
+        // Bunyi blip periodik (tetap aktif walau BGM di-mute)
         if (
           soundEnabled &&
-          !muted &&
           nextIndex % BLIP_EVERY === 0 &&
           nextIndex <= text.length
         ) {
-          play("blip");
+          play(soundName);
         }
 
         // Jeda lebih lama setelah tanda baca

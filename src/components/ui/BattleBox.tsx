@@ -7,6 +7,7 @@
  */
 
 import { type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 
 export default function BattleBox({
   children,
@@ -17,8 +18,10 @@ export default function BattleBox({
   className?: string;
   padding?: string;
 }) {
+  const pathname = usePathname();
+
   return (
-    <div className={`ut-battle-box relative ${className}`}>
+    <div key={pathname} className={`ut-battle-box relative ${className}`}>
       <div className={`ut-battle-box-inner ${padding}`}>{children}</div>
     </div>
   );

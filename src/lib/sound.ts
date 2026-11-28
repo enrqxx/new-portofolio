@@ -25,7 +25,71 @@ export type SoundName =
   | "fall" // soul meluncur ke bawah saat encounter
   | "crack" // soul cracks in half (game over, step 2)
   | "shatter" // soul shards scatter (game over, step 3)
-  | "gameover"; // game over jingle
+  | "gameover" // game over jingle
+  | "graze" // menyerempet peluru ala Deltarune
+  | "boxbreak" // kotak arena dibelah (Board Rend)
+  | "bossHurt" // Knight terkena serangan FIGHT / Rude Buster
+  | "novaCharge" // charge Crystal Nova
+  | "starBurst" // ledakan bintang Knight
+  | "swordDrop" // pedang melesat (Knife Dance)
+  | "slashWarn" // telegraf tebasan (Sanguine Slash)
+  | "ominous" // suara misterius di halaman 404
+  | "sansBlip" // suara ketikan Sans khusus di /experience
+  | "bossFade" // Roaring Knight lenyap jadi debu
+  | "bossWin"; // jingle kemenangan mengalahkan Roaring Knight
+
+// File audio SFX asli: khusus suara Sans di /experience, halaman 404,
+// dan seluruh efek pertarungan Roaring Knight di /roar.
+// Semua SFX tombol UI (move, select, back, save, mercy, blip) tetap memakai
+// synth prosedural default supaya ringan & snappy.
+const AUDIO_FILES: Partial<Record<SoundName, { src: string; gain?: number }>> = {
+  sansBlip: { src: "/audio/sfx/blip.m4a", gain: 0.75 },
+  ominous: { src: "/audio/sfx/ominous.m4a", gain: 1.0 },
+  roar: { src: "/audio/sfx/roar.m4a", gain: 1.4 },
+  slash: { src: "/audio/sfx/slash.m4a", gain: 1.2 },
+  hurt: { src: "/audio/sfx/hurt.m4a", gain: 1.3 },
+  boxbreak: { src: "/audio/sfx/boxbreak.m4a", gain: 1.35 },
+  bossHurt: { src: "/audio/sfx/boss-hurt.m4a", gain: 1.3 },
+  bossFade: { src: "/audio/sfx/boss-fade.m4a", gain: 1.35 },
+  bossWin: { src: "/audio/sfx/boss-win.m4a", gain: 1.25 },
+  novaCharge: { src: "/audio/sfx/nova-charge.m4a", gain: 1.3 },
+  starBurst: { src: "/audio/sfx/star-burst.m4a", gain: 1.15 },
+  swordDrop: { src: "/audio/sfx/sword-drop.m4a", gain: 1.0 },
+  slashWarn: { src: "/audio/sfx/slash-warn.m4a", gain: 1.0 },
+};
+
+const decodedBuffers = new Map<SoundName, AudioBuffer>();
+const loadingBuffers = new Set<SoundName>();
+
+function preloadAudioBuffers(context: AudioContext): void {
+  (Object.keys(AUDIO_FILES) as SoundName[]).forEach((name) => {
+    if (decodedBuffers.has(name) || loadingBuffers.has(name)) return;
+    const entry = AUDIO_FILES[name];
+    if (!entry) return;
+    loadingBuffers.add(name);
+    fetch(entry.src)
+      .then((r) => (r.ok ? r.arrayBuffer() : null))
+      .then((buf) => (buf ? context.decodeAudioData(buf) : null))
+      .then((decoded) => {
+        if (decoded) decodedBuffers.set(name, decoded);
+      })
+      .catch(() => {
+        /* fallback ke synth prosedural */
+      });
+  });
+}
+
+function playBuffer(name: SoundName, context: AudioContext): boolean {
+  const buf = decodedBuffers.get(name);
+  if (!buf || !masterGain) return false;
+  const src = context.createBufferSource();
+  src.buffer = buf;
+  const g = context.createGain();
+  g.gain.value = AUDIO_FILES[name]?.gain ?? 1.0;
+  src.connect(g).connect(masterGain);
+  src.start();
+  return true;
+}
 
 let ctx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
@@ -46,6 +110,7 @@ function getCtx(): AudioContext | null {
     masterGain = ctx.createGain();
     masterGain.gain.value = 0.18;
     masterGain.connect(ctx.destination);
+    preloadAudioBuffers(ctx);
   } catch {
     return null;
   }
@@ -242,12 +307,64 @@ const SOUND_PRESETS: Record<SoundName, () => void> = {
     );
     tone({ freq: 110, duration: 0.9, type: "square", volume: 0.1, delay: 2.6 });
   },
+
+  graze: () => {
+    // tick tipis bernada tinggi saat SOUL menyerempet peluru (khas Deltarune)
+    tone({ freq: 1480, sweepTo: 2100, duration: 0.032, type: "triangle", volume: 0.22 });
+  },
+
+  boxbreak: () => {
+    noise({ duration: 0.2, volume: 0.5, highpass: 900 });
+    tone({ freq: 180, sweepTo: 48, duration: 0.22, type: "sawtooth", volume: 0.45 });
+  },
+
+  bossHurt: () => {
+    tone({ freq: 240, sweepTo: 70, duration: 0.16, type: "sawtooth", volume: 0.45 });
+    noise({ duration: 0.1, volume: 0.3, highpass: 1200 });
+  },
+
+  novaCharge: () => {
+    tone({ freq: 220, sweepTo: 880, duration: 0.45, type: "triangle", volume: 0.35 });
+  },
+
+  starBurst: () => {
+    noise({ duration: 0.12, volume: 0.32, highpass: 2400 });
+    tone({ freq: 720, sweepTo: 180, duration: 0.14, type: "square", volume: 0.25 });
+  },
+
+  swordDrop: () => {
+    tone({ freq: 920, sweepTo: 260, duration: 0.1, type: "sawtooth", volume: 0.25 });
+  },
+
+  slashWarn: () => {
+    tone({ freq: 1100, sweepTo: 1500, duration: 0.06, type: "square", volume: 0.22 });
+  },
+
+  ominous: () => {
+    tone({ freq: 110, sweepTo: 72, duration: 0.45, type: "triangle", volume: 0.35 });
+  },
+
+  sansBlip: () => {
+    tone({ freq: 220, duration: 0.04, type: "square", volume: 0.22 });
+  },
+
+  bossFade: () => {
+    noise({ duration: 0.4, volume: 0.35, highpass: 1400 });
+    tone({ freq: 320, sweepTo: 90, duration: 0.35, type: "triangle", volume: 0.3 });
+  },
+
+  bossWin: () => {
+    [523, 659, 784, 1047].forEach((freq, i) =>
+      tone({ freq, duration: 0.18, type: "triangle", volume: 0.36, delay: i * 0.09 })
+    );
+  },
 };
 
 export function playSound(name: SoundName): void {
   const context = getCtx();
   if (!context) return;
   if (context.state === "suspended") return; // wait for a user gesture
+  if (playBuffer(name, context)) return;
   SOUND_PRESETS[name]();
 }
 

@@ -27,7 +27,6 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useSound } from "@/components/providers/SoundProvider";
 
 /* ====================================================================
    KONFIGURASI
@@ -158,17 +157,12 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 export function EncounterProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { muted } = useSound();
 
   const [stage, setStage] = useState<Stage>("idle");
   const [origin, setOrigin] = useState<Origin>({ x: 0, y: 0 });
   const [heartOn, setHeartOn] = useState(true);
 
   const busyRef = useRef(false);
-  const mutedRef = useRef(muted);
-  useEffect(() => {
-    mutedRef.current = muted;
-  }, [muted]);
   const heartRef = useRef<HTMLDivElement>(null);
   const sfxRef = useRef<Sfx | null>(null);
   const navWaiter = useRef<{ path: string; done: () => void } | null>(null);
@@ -217,15 +211,15 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
 
       const o = from ?? { x: window.innerWidth / 2, y: window.innerHeight / 2 };
       setOrigin(o);
-      if (!mutedRef.current && !sfxRef.current) sfxRef.current = createSfx();
-      const sfx = () => (mutedRef.current ? null : sfxRef.current);
+      if (!sfxRef.current) sfxRef.current = createSfx();
+      const sfx = sfxRef.current;
 
       /* --- 1. FLASH --- */
       setHeartOn(true);
       setStage("flash");
       for (let i = 0; i < FLASH_COUNT; i++) {
         setHeartOn(true);
-        sfx()?.blip(i === 0 ? 660 : 880);
+        sfx?.blip(i === 0 ? 660 : 880);
         await sleep(FLASH_ON);
         setHeartOn(false);
         await sleep(FLASH_OFF);
@@ -235,7 +229,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
 
       /* --- 2. FLY (spiral ke pojok kiri-bawah) --- */
       setStage("fly");
-      sfx()?.swoosh();
+      sfx?.swoosh();
 
       const tx = window.innerWidth * TARGET.x;
       const ty = window.innerHeight * TARGET.y;
@@ -267,7 +261,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       /* --- 3. COVER + navigasi --- */
       setOrigin({ x: tx, y: ty });
       setStage("cover");
-      sfx()?.thud();
+      sfx?.thud();
       await sleep(220);
       await goAndWait();
 
