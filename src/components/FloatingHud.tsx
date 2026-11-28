@@ -57,11 +57,11 @@ export default function FloatingHud() {
           onFocus={() => play("blip")}
           onClick={toggleMute}
           aria-pressed={muted}
-          aria-label={muted ? "Unmute sound" : "Mute sound"}
-          title={muted ? "Sound: OFF" : "Sound: ON"}
+          aria-label={muted ? "Unmute music" : "Mute music"}
+          title={muted ? "Music: OFF" : "Music: ON"}
         >
           <span aria-hidden="true">{muted ? "♪̸" : "♪"}</span>
-          <span className="sr-only">{muted ? "Unmute" : "Mute"}</span>
+          <span className="sr-only">{muted ? "Unmute music" : "Mute music"}</span>
         </button>
       </div>
     </>

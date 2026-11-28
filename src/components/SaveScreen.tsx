@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import SoulHeart from "@/components/ui/SoulHeart";
+import SaveStar from "@/components/ui/SaveStar";
 import TypewriterText from "@/components/ui/TypewriterText";
 import GameOver, { type Phase as GameOverPhase } from "@/components/GameOver";
 import { useSound } from "@/components/providers/SoundProvider";
@@ -291,7 +292,11 @@ export default function SaveScreen({ onEnter }: { onEnter: () => void }) {
               <SoulHeart size={40} />
             </div>
 
-            <p className="ut-save-screen__name">* {PLAYER.name}</p>
+            <p className="ut-save-screen__name">
+              <SaveStar size={18} />
+              <span>* {PLAYER.name}</span>
+              <SaveStar size={18} />
+            </p>
             <p className="ut-save-screen__role">{PLAYER.role.toUpperCase()}</p>
 
             <div className="ut-save-screen__divider" />

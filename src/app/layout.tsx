@@ -19,7 +19,12 @@ const terminal = VT323({
   display: "swap",
 });
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "Yusyfi — Portfolio | Filled with DETERMINATION",
   description:
     "An Undertale-themed portfolio by Yusyfi, Web & Mobile Developer. CHECK the about, inspect the STATS, encounter PROJECTS, walk the JOURNEY, and show some MERCY.",
@@ -29,19 +34,12 @@ export const metadata: Metadata = {
     description:
       "An Undertale-themed interactive developer portfolio featuring procedural Web Audio SFX and a playable secret boss.",
     type: "website",
-    images: [
-      {
-        url: "/img/avatar.jpeg",
-        alt: "Yusyfi — Web & Mobile Developer",
-      },
-    ],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Yusyfi — Portfolio | Filled with DETERMINATION",
     description:
       "An Undertale-themed interactive developer portfolio featuring procedural Web Audio SFX and a playable secret boss.",
-    images: ["/img/avatar.jpeg"],
   },
 };
 

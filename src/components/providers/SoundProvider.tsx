@@ -20,7 +20,6 @@ import {
 import {
   playSound,
   resumeAudio,
-  setMasterVolume,
   type SoundName,
 } from "@/lib/sound";
 
@@ -52,19 +51,14 @@ export function SoundProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const play = useCallback(
-    (name: SoundName) => {
-      if (muted) return;
-      resumeAudio();
-      playSound(name);
-    },
-    [muted]
-  );
+  const play = useCallback((name: SoundName) => {
+    resumeAudio();
+    playSound(name);
+  }, []);
 
   const toggleMute = useCallback(() => {
     setMuted((prev) => {
       const next = !prev;
-      setMasterVolume(next ? 0 : undefined);
       try {
         window.localStorage.setItem(MUTE_KEY, String(next));
       } catch {
@@ -73,11 +67,6 @@ export function SoundProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
-
-  // Pastikan volume sinkron saat pertama kali mount
-  useEffect(() => {
-    setMasterVolume(muted ? 0 : undefined);
-  }, [muted]);
 
   const value = useMemo(
     () => ({ muted, toggleMute, play, bgmPaused, setBgmPaused }),

@@ -84,6 +84,8 @@ export default function ExperienceSection() {
             key={entry.id}
             text={entry.text}
             speed={24}
+            soundEnabled
+            soundName="sansBlip"
             className="ut-check-text"
           />
         </div>
